@@ -8,7 +8,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 Role = Literal["user", "assistant", "system", "tool", "transcript", "memory", "unknown"]
 
 
