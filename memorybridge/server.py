@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import hmac
 
-from pydantic import AnyHttpUrl
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from pydantic import AnyHttpUrl
 
 from .config import Settings
 from .models import Ack, MemoryPut

@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
-from typing import Iterable
+from collections.abc import Iterable
 
 from .models import SearchHit
 

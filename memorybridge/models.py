@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -13,7 +13,7 @@ Role = Literal["user", "assistant", "system", "tool", "transcript", "memory", "u
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def content_hash(content: str) -> str:
@@ -57,7 +57,7 @@ class MemoryRecord(BaseModel):
     collection: str | None = None
 
     @classmethod
-    def from_put(cls, put: MemoryPut, *, memory_id: str, seq: int) -> "MemoryRecord":
+    def from_put(cls, put: MemoryPut, *, memory_id: str, seq: int) -> MemoryRecord:
         now = utc_now()
         created = put.created_at or now
         return cls(
