@@ -1,0 +1,21 @@
+[Unit]
+Description=MemoryBridge indexing and snapshot worker
+After=network-online.target memorybridge.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=memorybridge
+Group=memorybridge
+EnvironmentFile=/etc/memorybridge.env
+ExecStart=/opt/memorybridge/.venv/bin/memorybridge-worker
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/memorybridge
+
+[Install]
+WantedBy=multi-user.target

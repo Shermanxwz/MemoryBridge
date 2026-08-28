@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "matcher": "other",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memorybridge-codex-hook",
+            "timeout": 1
+          }
+        ]
+      }
+    ]
+  }
+}

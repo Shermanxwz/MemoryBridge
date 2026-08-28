@@ -1,0 +1,21 @@
+services:
+  memorybridge:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MEMORYBRIDGE_ARCHIVE_DIR: /var/lib/memorybridge/archive
+    network_mode: host
+    volumes:
+      - ${MEMORYBRIDGE_ARCHIVE_DIR:-./archive}:/var/lib/memorybridge/archive
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["memorybridge-worker"]
+    env_file: .env
+    environment:
+      MEMORYBRIDGE_ARCHIVE_DIR: /var/lib/memorybridge/archive
+    network_mode: host
+    volumes:
+      - ${MEMORYBRIDGE_ARCHIVE_DIR:-./archive}:/var/lib/memorybridge/archive

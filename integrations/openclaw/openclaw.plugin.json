@@ -1,0 +1,11 @@
+{
+  "id": "memorybridge",
+  "name": "MemoryBridge Capture",
+  "version": "0.1.0",
+  "description": "Crash-safe local capture bridge for MemoryBridge",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

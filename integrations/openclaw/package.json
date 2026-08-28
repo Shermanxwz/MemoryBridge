@@ -1,0 +1,18 @@
+{
+  "name": "memorybridge-openclaw-capture",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Invisible crash-safe MemoryBridge capture adapter for OpenClaw",
+  "peerDependencies": {
+    "openclaw": ">=0"
+  },
+  "openclaw": {
+    "extensions": ["./index.js"]
+  },
+  "files": [
+    "index.js",
+    "openclaw.plugin.json",
+    "README.md"
+  ]
+}
