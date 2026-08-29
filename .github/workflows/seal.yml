@@ -101,7 +101,7 @@ jobs:
         run: node tests/contracts/openclaw.mjs
 
   hermes-contract:
-    name: Hermes 0.20.6 plugin contract
+    name: Hermes upstream ac6c802 plugin contract
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -110,8 +110,10 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install -U pip
-      - name: Install MemoryBridge and real Hermes package
-        run: pip install -e . 'hermes-agent==0.20.6'
+      - name: Install MemoryBridge and pinned current Hermes source
+        run: |
+          pip install -e .
+          pip install 'git+https://github.com/NousResearch/hermes-agent.git@ac6c8028e00d01ee2f299ba7fd03329c7f10382d'
       - name: Hermes native plugin doctor
         run: hermes plugins doctor integrations/hermes --ci
       - name: Real Hermes SessionDB -> MemoryBridge spool contract
