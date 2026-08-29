@@ -1,5 +1,27 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memorybridge-codex-hook",
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "memorybridge-codex-hook",
+            "timeout": 1
+          }
+        ]
+      }
+    ],
     "SessionEnd": [
       {
         "matcher": "other",
