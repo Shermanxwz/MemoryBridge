@@ -75,9 +75,15 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _wait_for_port(port: int) -> None:
+def _wait_for_port(port: int, process: subprocess.Popen[str]) -> None:
     deadline = time.time() + 30
     while time.time() < deadline:
+        if process.poll() is not None:
+            stdout, stderr = process.communicate(timeout=2)
+            raise RuntimeError(
+                f"MemoryBridge MCP server exited with code {process.returncode}; "
+                f"stdout={stdout!r}; stderr={stderr!r}"
+            )
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.5):
                 return
@@ -230,12 +236,13 @@ async def test_local_spool_through_real_mcp_http_to_qdrant(tmp_path: Path):
     process = subprocess.Popen(
         ["memorybridge-server"],
         env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
     )
     qdrant = QdrantHTTP(qdrant_url)
     try:
-        _wait_for_port(port)
+        _wait_for_port(port, process)
         client_settings = Settings(
             mcp_url=mcp_url,
             mcp_token="",
