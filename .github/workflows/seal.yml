@@ -145,8 +145,13 @@ jobs:
           export OPENCLAW_STATE_DIR="$OPENCLAW_HOME/.openclaw"
           ./node_modules/.bin/openclaw plugins install "$GITHUB_WORKSPACE/integrations/openclaw" --force
           ./node_modules/.bin/openclaw plugins enable memorybridge
-          ./node_modules/.bin/openclaw plugins doctor --json
-          ./node_modules/.bin/openclaw plugins inspect memorybridge --runtime --json
+          if [[ "${{ matrix.openclaw }}" == "2026.7.1-2" ]]; then
+            ./node_modules/.bin/openclaw plugins doctor
+            ./node_modules/.bin/openclaw plugins list --verbose
+          else
+            ./node_modules/.bin/openclaw plugins doctor --json
+            ./node_modules/.bin/openclaw plugins inspect memorybridge --runtime --json
+          fi
       - name: Invoke real-shape hooks and verify fsynced capture
         run: node tests/contracts/openclaw.mjs
 
