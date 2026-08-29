@@ -1,10 +1,20 @@
 # Hermes integration
 
-Copy `plugin.py` to an enabled Hermes general-plugin directory (normally
-`~/.hermes/plugins/memorybridge/`) after installing the `memorybridge` Python package in the same environment.
-The plugin uses `post_llm_call` and only fsyncs to the local spool.
+Install MemoryBridge in the same Python environment as Hermes, then copy this directory to an enabled Hermes
+general-plugin location (normally `~/.hermes/plugins/memorybridge/`). Keep both `plugin.py` and `plugin.yaml`.
 
-Add the server to `~/.hermes/config.yaml`:
+The plugin registers Hermes' native `on_session_finalize` lifecycle hook. Hermes has already persisted the full
+conversation in its own `SessionDB`/`~/.hermes/state.db` by that point; MemoryBridge reads those durable messages
+and fsyncs them into its local spool with deterministic idempotency keys. The hook never performs MCP/Qdrant or
+other network I/O.
+
+Validate an installation with Hermes itself:
+
+```bash
+hermes plugins doctor ~/.hermes/plugins/memorybridge --ci
+```
+
+Add the remote server to `~/.hermes/config.yaml`:
 
 ```yaml
 mcp_servers:
@@ -15,5 +25,6 @@ mcp_servers:
     enabled: true
 ```
 
-Hermes discovers the MCP tools at startup. Native memory/index remains preferred; MemoryBridge's
-`memory_search` automatically degrades vector -> lexical -> raw/recent when native retrieval is unavailable.
+Hermes discovers the MCP tools at startup. Native memory/index remains preferred. If native retrieval is absent,
+MemoryBridge `memory_search` degrades automatically from vector -> lexical -> raw/recent. Capture and retrieval
+remain independent, so a remote outage never blocks Hermes from finishing a conversation.
