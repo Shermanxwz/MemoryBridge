@@ -41,12 +41,17 @@ no autonomous deletion system.
                           |             qwen3-embedding:0.6b
                           |             via New API (optional)
                           |
-                          +--> snapshot + JSONL.GZ + SHA256 --> CloudDrive2
+                          +--> verified snapshot + JSONL.GZ + SHA256 --> CloudDrive2
 
   Codex -------------------+       OpenClaw ----------------+       Hermes ----------------+
   native index first       |       native index first      |       native index first     |
-  SessionEnd -> local spool+       hooks -> local spool    +       hooks -> local spool   +
-             background retry ----------- MCP ----------- background retry
+  turn hooks + reconcile   |       typed hooks -> spool    |       SessionDB finalize     |
+             local fsync --+-------------------------------+-------------------------------+
+                                        |
+                                  background retry
+                                        |
+                                        v
+                                  MemoryBridge MCP
 ```
 
 `qwen3:4b-instruct` is intentionally **not** on the reliability path. It can later be used as an optional curator
@@ -95,8 +100,15 @@ forcing a migration.
 cp .env.example .env
 $EDITOR .env
 
+# The container runs as uid/gid 10001. A bind-mounted archive path must be writable by it.
+# For a normal local filesystem, pre-create it before the first compose start:
+sudo install -d -o 10001 -g 10001 "$(grep '^MEMORYBRIDGE_ARCHIVE_DIR=' .env | cut -d= -f2-)"
+
 docker compose up -d --build
 ```
+
+If the archive path is a CloudDrive2/FUSE mount that does not support `chown`, configure that mount so uid/gid
+`10001` can create, rename and fsync files in the archive directory before starting the worker.
 
 Recommended production topology:
 
@@ -106,7 +118,9 @@ Internet -> HTTPS reverse proxy :443 -> MemoryBridge :8765 -> 127.0.0.1:6333 Qdr
 CloudDrive2 mount <---------------- archive worker
 ```
 
-Do **not** expose Qdrant publicly.
+Do **not** expose Qdrant publicly. Keep `MEMORYBRIDGE_HOST=127.0.0.1` when the HTTPS reverse proxy runs on the same
+host. Static `MEMORYBRIDGE_BEARER_TOKENS` are intended for a single trusted operator; use a distinct token per
+device and rotate a leaked token immediately.
 
 The worker is intentionally boring: it retries pending vector indexing and periodically creates archives. Point
 `MEMORYBRIDGE_ARCHIVE_DIR` at a CloudDrive2-mounted directory if desired.
@@ -123,8 +137,11 @@ archive/<collection>/
   <qdrant-name>.snapshot.manifest.json
 ```
 
-The Qdrant snapshot is the fast recovery path. `JSONL.GZ` is the future-proof portable copy. The manifest contains
-SHA-256 hashes. Restore verifies hashes and refuses to overwrite a live collection unless `--force` is explicit.
+An archive is not accepted merely because Qdrant returned a snapshot filename. MemoryBridge immediately restores
+the new snapshot into a disposable verification collection, reads the restored records back, computes a semantic
+fingerprint, and generates the portable `JSONL.GZ` from that restored copy. Only then is the manifest finalized.
+The manifest also contains SHA-256 hashes. Restore verifies the files and semantic fingerprint and refuses to
+overwrite a live collection unless `--force` is explicit.
 
 ```bash
 memorybridge snapshot-create --collection memorybridge_raw
@@ -141,17 +158,30 @@ Run on each client device as a background process, or install the included user 
 
 ```bash
 memorybridge spool-sync --daemon
-# or copy deploy/systemd/memorybridge-spool.service to ~/.config/systemd/user/
-# then: systemctl --user enable --now memorybridge-spool.service
 ```
 
-Set `MEMORYBRIDGE_MCP_URL`, `MEMORYBRIDGE_MCP_TOKEN` and `MEMORYBRIDGE_SPOOL_DIR` in that user's environment.
+For the included systemd user unit, store persistent client settings in `~/.config/memorybridge.env`:
+
+```env
+MEMORYBRIDGE_MCP_URL=https://memory.example.com/mcp
+MEMORYBRIDGE_MCP_TOKEN=YOUR_DEVICE_TOKEN
+MEMORYBRIDGE_SPOOL_DIR=~/.memorybridge/spool
+```
+
+Then install and enable it:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp deploy/systemd/memorybridge-spool.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now memorybridge-spool.service
+```
 
 Integration examples live in `integrations/`:
 
-- `integrations/codex/` — current Codex `SessionEnd` transcript-reference capture (full read happens in the daemon) and remote MCP config.
-- `integrations/openclaw/` — typed `message_received` + `agent_end` capture plugin and MCP command.
-- `integrations/hermes/` — `post_llm_call` capture plugin and HTTP MCP config.
+- `integrations/codex/` — native `UserPromptSubmit` + `Stop` local fsync and `SessionEnd` persisted-transcript reconciliation.
+- `integrations/openclaw/` — typed `message_received` + `agent_end` local capture plugin and remote MCP configuration.
+- `integrations/hermes/` — native `on_session_finalize` hook reading Hermes' already-persisted `SessionDB` and locally spooling it.
 
 The integrations are intentionally thin. They capture/sync; they do not duplicate each agent's native memory logic.
 
@@ -174,6 +204,7 @@ memorybridge restore-latest <collection> --force
 | Failure | Behavior |
 |---|---|
 | MCP/network unavailable on a client | local spool keeps records and retries later |
+| malformed local spool record | quarantined; later valid records continue |
 | New API / embedding model unavailable | writes continue; vector indexing stays pending; lexical/raw retrieval works |
 | fallback vector collection unavailable | lexical -> raw/recent |
 | host agent native index unavailable | `memory_search` provides server fallback |
