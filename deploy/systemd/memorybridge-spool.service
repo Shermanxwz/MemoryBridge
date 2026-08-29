@@ -9,6 +9,7 @@ ExecStart=%h/.local/bin/memorybridge spool-sync --daemon
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-%h/.config/memorybridge.env
 
 [Install]
 WantedBy=default.target
