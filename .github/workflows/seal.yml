@@ -9,6 +9,38 @@ permissions:
   contents: read
 
 jobs:
+  container-smoke:
+    name: production container startup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build -t memorybridge-seal .
+      - name: Start packaged MCP server as non-root user
+        shell: bash
+        run: |
+          set -euo pipefail
+          cid="$(docker run -d --network host \
+            -e MEMORYBRIDGE_HOST=127.0.0.1 \
+            -e MEMORYBRIDGE_PORT=18765 \
+            memorybridge-seal)"
+          cleanup() { docker logs "$cid" || true; docker rm -f "$cid" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          test "$(docker exec "$cid" id -u)" = "10001"
+          python - <<'PY'
+          import socket, time
+          deadline = time.time() + 30
+          while time.time() < deadline:
+              try:
+                  with socket.create_connection(("127.0.0.1", 18765), timeout=1):
+                      print("packaged MCP server startup: PASS")
+                      break
+              except OSError:
+                  time.sleep(0.25)
+          else:
+              raise SystemExit("packaged MCP server did not listen")
+          PY
+
   qdrant-e2e:
     name: qdrant-e2e (${{ matrix.qdrant }})
     runs-on: ubuntu-latest
