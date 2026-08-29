@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hmac
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
+from mcp.server import MCPServer
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
-from mcp.server.fastmcp import FastMCP
 from pydantic import AnyHttpUrl
 
 from .config import Settings
@@ -23,18 +25,24 @@ class StaticTokenVerifier(TokenVerifier):
         return None
 
 
-def build_server(settings: Settings | None = None) -> FastMCP:
+def build_server(settings: Settings | None = None) -> MCPServer:
     settings = settings or Settings()
+    service = MemoryService(settings)
+
+    @asynccontextmanager
+    async def lifespan(_server: MCPServer) -> AsyncIterator[None]:
+        try:
+            yield None
+        finally:
+            await service.close()
+
     kwargs = {
         "name": "MemoryBridge",
         "instructions": (
             "Portable memory source. Prefer the host agent's native memory index when available. "
             "Use memory_search only as fallback retrieval. Writes are durable in Qdrant before indexing."
         ),
-        "stateless_http": True,
-        "json_response": True,
-        "host": settings.host,
-        "port": settings.port,
+        "lifespan": lifespan,
     }
     if settings.bearer_tokens:
         kwargs["token_verifier"] = StaticTokenVerifier(settings.bearer_tokens)
@@ -43,8 +51,7 @@ def build_server(settings: Settings | None = None) -> FastMCP:
             resource_server_url=AnyHttpUrl(settings.public_mcp_url),
             required_scopes=["memory"],
         )
-    mcp = FastMCP(**kwargs)
-    service = MemoryService(settings)
+    mcp = MCPServer(**kwargs)
 
     @mcp.tool()
     async def memory_put(
@@ -64,7 +71,7 @@ def build_server(settings: Settings | None = None) -> FastMCP:
             source_agent=source_agent,
             source_device=source_device,
             session_id=session_id,
-            role=role,  # validated by Pydantic
+            role=role,
             project=project,
             metadata=metadata or {},
             idempotency_key=idempotency_key,
@@ -115,8 +122,14 @@ def build_server(settings: Settings | None = None) -> FastMCP:
 def main() -> None:
     settings = Settings()
     mcp = build_server(settings)
-    # FastMCP's production Streamable HTTP transport serves /mcp.
-    mcp.run(transport="streamable-http")
+    mcp.run(
+        transport="streamable-http",
+        host=settings.host,
+        port=settings.port,
+        streamable_http_path="/mcp",
+        stateless_http=True,
+        json_response=True,
+    )
 
 
 if __name__ == "__main__":
