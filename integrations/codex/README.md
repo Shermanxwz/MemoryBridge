@@ -11,8 +11,15 @@ bearer_token_env_var = "MEMORYBRIDGE_MCP_TOKEN"
 required = false
 ```
 
-`SessionEnd` only fsyncs a tiny reference to Codex's already-flushed transcript. It does not read the full
-transcript or perform network I/O inside Codex's short shutdown-hook budget. The background spool daemon reads,
-chunks and delivers it later. Run `memorybridge spool-sync --daemon` as a user service.
+MemoryBridge uses three native Codex lifecycle hooks, and none of them performs network I/O:
 
-For retrieval, use Codex native Memories/index first when available. `memory_search` is the fallback tool.
+- `UserPromptSubmit` fsyncs the submitted user turn into the local spool.
+- `Stop` fsyncs the completed assistant turn into the local spool.
+- `SessionEnd` fsyncs only a tiny reference to Codex's persisted transcript. The background daemon later reads
+  that transcript as an idempotent reconciliation/backfill source.
+
+This closes the normal shutdown dependency: MCP, Qdrant, or the network may all be unavailable and Codex still
+finishes normally with its current turns preserved locally. Run `memorybridge spool-sync --daemon` as a user
+service so pending records are delivered automatically when connectivity returns.
+
+For retrieval, use Codex native Memories/index first when available. `memory_search` is the server-side fallback.
