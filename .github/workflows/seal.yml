@@ -49,7 +49,7 @@ jobs:
       - run: python -m pip install -U pip && pip install -e .
       - run: npm install --global @openai/codex@0.150.1
       - run: codex --version
-      - name: Exercise exact current SessionEnd command payload through MemoryBridge hook
+      - name: Exercise official per-turn and SessionEnd payloads through MemoryBridge
         shell: bash
         run: |
           set -euo pipefail
@@ -58,6 +58,38 @@ jobs:
           printf '%s\n' '{"type":"message","role":"user","content":"seal codex user"}' > "$transcript"
           printf '%s\n' '{"type":"message","role":"assistant","content":"seal codex assistant"}' >> "$transcript"
           export MEMORYBRIDGE_SPOOL_DIR="$root/spool"
+
+          python - "$transcript" <<'PY' | memorybridge-codex-hook
+          import json, sys
+          print(json.dumps({
+              "session_id": "seal-codex-session",
+              "turn_id": "seal-turn-1",
+              "transcript_path": sys.argv[1],
+              "cwd": "/tmp",
+              "hook_event_name": "UserPromptSubmit",
+              "model": "seal-model",
+              "permission_mode": "default",
+              "prompt": "seal codex user",
+          }))
+          PY
+
+          python - "$transcript" <<'PY' | memorybridge-codex-hook
+          import json, sys
+          print(json.dumps({
+              "session_id": "seal-codex-session",
+              "turn_id": "seal-turn-1",
+              "transcript_path": sys.argv[1],
+              "cwd": "/tmp",
+              "hook_event_name": "Stop",
+              "model": "seal-model",
+              "permission_mode": "default",
+              "stop_hook_active": False,
+              "last_assistant_message": "seal codex assistant",
+          }))
+          PY
+
+          test "$(find "$root/spool/pending" -name '*.json' | wc -l)" -eq 2
+
           python - "$transcript" <<'PY' | memorybridge-codex-hook
           import json, sys
           print(json.dumps({
@@ -69,16 +101,22 @@ jobs:
           }))
           PY
           test "$(find "$root/spool/transcript-jobs" -name '*.json' | wc -l)" -eq 1
+
           python - <<'PY'
+          import json
+          import os
           from pathlib import Path
           from memorybridge.config import Settings
           from memorybridge.spool import LocalSpool, materialize_transcript_jobs
-          import os
+
           settings = Settings(spool_dir=Path(os.environ["MEMORYBRIDGE_SPOOL_DIR"]))
+          spool = LocalSpool(settings.spool_dir)
+          direct = [json.loads(path.read_text()) for path in spool.pending_paths()]
+          assert {row["role"] for row in direct} == {"user", "assistant"}
           materialized, quarantined = materialize_transcript_jobs(settings)
           assert materialized == 1 and quarantined == 0
-          assert len(LocalSpool(settings.spool_dir).pending_paths()) >= 1
-          print("Codex SessionEnd -> fsync spool -> transcript materialization: PASS")
+          assert len(spool.pending_paths()) >= 3
+          print("Codex per-turn fsync + SessionEnd transcript reconciliation: PASS")
           PY
 
   openclaw-contract:
@@ -98,9 +136,17 @@ jobs:
       - name: Install real published OpenClaw package
         working-directory: integrations/openclaw
         run: npm install --ignore-scripts --no-save openclaw@${{ matrix.openclaw }}
-      - name: Validate plugin with real OpenClaw CLI
+      - name: Load linked MemoryBridge plugin in isolated real OpenClaw runtime
+        shell: bash
         working-directory: integrations/openclaw
-        run: ./node_modules/.bin/openclaw plugins validate --entry index.js --json
+        run: |
+          set -euo pipefail
+          export OPENCLAW_HOME="$(mktemp -d)"
+          export OPENCLAW_STATE_DIR="$OPENCLAW_HOME/.openclaw"
+          ./node_modules/.bin/openclaw plugins install -l "$GITHUB_WORKSPACE/integrations/openclaw" --force
+          ./node_modules/.bin/openclaw plugins enable memorybridge
+          ./node_modules/.bin/openclaw plugins doctor --json
+          ./node_modules/.bin/openclaw plugins inspect memorybridge --runtime --json
       - name: Invoke real-shape hooks and verify fsynced capture
         run: node tests/contracts/openclaw.mjs
 
@@ -114,10 +160,14 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install -U pip
-      - name: Install MemoryBridge and pinned current Hermes source
+      - name: Install MemoryBridge and pinned current Hermes source editable
+        shell: bash
         run: |
+          set -euo pipefail
           pip install -e .
-          pip install 'git+https://github.com/NousResearch/hermes-agent.git@ac6c8028e00d01ee2f299ba7fd03329c7f10382d'
+          git clone --filter=blob:none https://github.com/NousResearch/hermes-agent.git /tmp/hermes
+          git -C /tmp/hermes checkout ac6c8028e00d01ee2f299ba7fd03329c7f10382d
+          pip install -e /tmp/hermes
       - name: Hermes native plugin doctor
         run: hermes plugins doctor integrations/hermes --ci
       - name: Real Hermes SessionDB -> MemoryBridge spool contract
