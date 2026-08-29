@@ -211,11 +211,12 @@ async def test_full_qdrant_fallback_and_recovery_chain(tmp_path: Path, embedding
 
 
 @pytest.mark.asyncio
-async def test_local_spool_through_real_mcp_http_to_qdrant(tmp_path: Path):
+async def test_local_spool_through_bearer_protected_mcp_http_to_qdrant(tmp_path: Path):
     qdrant_url = os.environ["MEMORYBRIDGE_E2E_QDRANT_URL"].rstrip("/")
     _wait_for_qdrant(qdrant_url)
     port = _free_port()
     mcp_url = f"http://127.0.0.1:{port}/mcp"
+    token = "seal-wire-token"
     write_collection = "mb_seal_wire_raw"
     meta_collection = "mb_seal_wire_meta"
     env = os.environ.copy()
@@ -230,7 +231,8 @@ async def test_local_spool_through_real_mcp_http_to_qdrant(tmp_path: Path):
             "MEMORYBRIDGE_HOST": "127.0.0.1",
             "MEMORYBRIDGE_PORT": str(port),
             "MEMORYBRIDGE_PUBLIC_MCP_URL": mcp_url,
-            "MEMORYBRIDGE_BEARER_TOKENS": "",
+            "MEMORYBRIDGE_AUTH_ISSUER": "https://auth.example.invalid",
+            "MEMORYBRIDGE_BEARER_TOKENS": token,
         }
     )
     process = subprocess.Popen(
@@ -243,9 +245,18 @@ async def test_local_spool_through_real_mcp_http_to_qdrant(tmp_path: Path):
     qdrant = QdrantHTTP(qdrant_url)
     try:
         _wait_for_port(port, process)
+
+        unauthenticated = httpx.post(
+            mcp_url,
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
+            headers={"accept": "application/json, text/event-stream"},
+            timeout=5,
+        )
+        assert unauthenticated.status_code == 401
+
         client_settings = Settings(
             mcp_url=mcp_url,
-            mcp_token="",
+            mcp_token=token,
             spool_dir=tmp_path / "wire-spool",
             qdrant_url=qdrant_url,
         )
@@ -263,7 +274,10 @@ async def test_local_spool_through_real_mcp_http_to_qdrant(tmp_path: Path):
         assert delivered["pending"] == 0
         assert await qdrant.count(write_collection) == 1
 
-        async with httpx2.AsyncClient(timeout=httpx2.Timeout(15.0, read=30.0)) as http_client:
+        headers = {"Authorization": f"Bearer {token}"}
+        async with httpx2.AsyncClient(
+            headers=headers, timeout=httpx2.Timeout(15.0, read=30.0)
+        ) as http_client:
             transport = streamable_http_client(mcp_url, http_client=http_client)
             async with Client(transport) as client:
                 since = await client.call_tool("memory_since", {"cursor": 0, "limit": 10})
