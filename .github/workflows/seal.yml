@@ -82,18 +82,22 @@ jobs:
           PY
 
   openclaw-contract:
-    name: OpenClaw 2026.8.1 plugin contract
+    name: OpenClaw ${{ matrix.openclaw }} plugin contract
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        openclaw: ["2026.7.1-2", "2026.8.1-beta.3"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: npm
           cache-dependency-path: integrations/openclaw/package.json
-      - name: Install real OpenClaw package
+      - name: Install real published OpenClaw package
         working-directory: integrations/openclaw
-        run: npm install --ignore-scripts --no-save openclaw@2026.8.1
+        run: npm install --ignore-scripts --no-save openclaw@${{ matrix.openclaw }}
       - name: Validate plugin with real OpenClaw CLI
         working-directory: integrations/openclaw
         run: ./node_modules/.bin/openclaw plugins validate --entry index.js --json
