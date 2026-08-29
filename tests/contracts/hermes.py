@@ -25,8 +25,12 @@ finally:
     if callable(close):
         close()
 
-plugin_path = Path("integrations/hermes/plugin.py").resolve()
-spec = importlib.util.spec_from_file_location("memorybridge_hermes_contract", plugin_path)
+plugin_path = Path("integrations/hermes/__init__.py").resolve()
+spec = importlib.util.spec_from_file_location(
+    "memorybridge_hermes_contract",
+    plugin_path,
+    submodule_search_locations=[str(plugin_path.parent)],
+)
 if spec is None or spec.loader is None:
     raise RuntimeError("unable to load MemoryBridge Hermes plugin")
 plugin = importlib.util.module_from_spec(spec)
