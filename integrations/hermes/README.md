@@ -1,7 +1,7 @@
 # Hermes integration
 
 Install MemoryBridge in the same Python environment as Hermes, then copy this directory to an enabled Hermes
-general-plugin location (normally `~/.hermes/plugins/memorybridge/`). Keep both `plugin.py` and `plugin.yaml`.
+general-plugin location (normally `~/.hermes/plugins/memorybridge/`). Keep `__init__.py` and `plugin.yaml` together.
 
 The plugin registers Hermes' native `on_session_finalize` lifecycle hook. Hermes has already persisted the full
 conversation in its own `SessionDB`/`~/.hermes/state.db` by that point; MemoryBridge reads those durable messages
