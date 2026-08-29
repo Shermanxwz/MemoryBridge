@@ -136,14 +136,14 @@ jobs:
       - name: Install real published OpenClaw package
         working-directory: integrations/openclaw
         run: npm install --ignore-scripts --no-save openclaw@${{ matrix.openclaw }}
-      - name: Load linked MemoryBridge plugin in isolated real OpenClaw runtime
+      - name: Load MemoryBridge plugin in isolated real OpenClaw runtime
         shell: bash
         working-directory: integrations/openclaw
         run: |
           set -euo pipefail
           export OPENCLAW_HOME="$(mktemp -d)"
           export OPENCLAW_STATE_DIR="$OPENCLAW_HOME/.openclaw"
-          ./node_modules/.bin/openclaw plugins install -l "$GITHUB_WORKSPACE/integrations/openclaw"
+          ./node_modules/.bin/openclaw plugins install "$GITHUB_WORKSPACE/integrations/openclaw" --force
           ./node_modules/.bin/openclaw plugins enable memorybridge
           ./node_modules/.bin/openclaw plugins doctor --json
           ./node_modules/.bin/openclaw plugins inspect memorybridge --runtime --json
