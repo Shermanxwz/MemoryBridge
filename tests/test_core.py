@@ -1,7 +1,12 @@
+import asyncio
 from pathlib import Path
 
+from mcp.server import MCPServer
+
+from memorybridge.config import Settings
 from memorybridge.lexical import lexical_rank, tokens
 from memorybridge.models import MemoryPut, next_time_ns
+from memorybridge.server import build_server
 from memorybridge.spool import LocalSpool
 
 
@@ -46,3 +51,11 @@ def test_transcript_job_is_small_and_replaceable(tmp_path: Path):
     assert job1 == job2
     assert job1.stat().st_size < 4096
     assert len(spool.transcript_job_paths()) == 1
+
+
+def test_server_constructs_with_declared_mcp_sdk():
+    server = build_server(Settings())
+    try:
+        assert isinstance(server, MCPServer)
+    finally:
+        asyncio.run(server._memorybridge_service.close())
