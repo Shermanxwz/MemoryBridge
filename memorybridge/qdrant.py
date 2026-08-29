@@ -81,10 +81,13 @@ class QdrantHTTP:
                 raise
 
     async def upsert_payload_point(self, collection: str, point_id: str | int, payload: dict[str, Any]) -> None:
+        # Qdrant's point schema requires the vector field even for a collection
+        # configured with no vectors. An empty named-vector map is the supported
+        # representation of a payload-only point.
         await self.request(
             "PUT",
             f"/collections/{quote(collection, safe='')}/points?wait=true",
-            json={"points": [{"id": point_id, "payload": payload}]},
+            json={"points": [{"id": point_id, "vector": {}, "payload": payload}]},
         )
 
     async def upsert_vector_point(
