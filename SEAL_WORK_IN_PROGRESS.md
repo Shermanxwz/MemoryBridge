@@ -1,1 +1,0 @@
-Seal hardening in progress.

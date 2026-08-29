@@ -37,9 +37,11 @@ class LocalSpool:
         self.root = root
         self.pending = root / "pending"
         self.sent = root / "sent"
+        self.failed = root / "failed"
         self.transcript_jobs = root / "transcript-jobs"
         self.pending.mkdir(parents=True, exist_ok=True)
         self.sent.mkdir(parents=True, exist_ok=True)
+        self.failed.mkdir(parents=True, exist_ok=True)
         self.transcript_jobs.mkdir(parents=True, exist_ok=True)
 
     def put(self, memory: MemoryPut) -> Path:
@@ -93,6 +95,16 @@ class LocalSpool:
         finally:
             _fsync_dir(self.transcript_jobs)
 
+    def quarantine(self, path: Path, *, prefix: str = "memory") -> Path:
+        """Move malformed local data aside without deleting it or blocking later writes."""
+        target = self.failed / f"{prefix}-{path.name}"
+        if target.exists():
+            target = self.failed / f"{prefix}-{uuid.uuid4().hex}-{path.name}"
+        os.replace(path, target)
+        _fsync_dir(path.parent)
+        _fsync_dir(self.failed)
+        return target
+
     def mark_sent(self, path: Path) -> None:
         target = self.sent / path.name
         os.replace(path, target)
@@ -125,15 +137,27 @@ async def push_memory(settings: Settings, memory: MemoryPut) -> None:
                 raise RuntimeError(str(result))
 
 
-def materialize_transcript_jobs(settings: Settings, *, max_jobs: int = 8) -> int:
+def materialize_transcript_jobs(settings: Settings, *, max_jobs: int = 8) -> tuple[int, int]:
     spool = LocalSpool(settings.spool_dir)
-    materialized = 0
+    materialized = quarantined = 0
     for job_path in spool.transcript_job_paths()[:max_jobs]:
         try:
             job = json.loads(job_path.read_text(encoding="utf-8"))
-            source = Path(job["path"])
-            if not source.is_file():
-                continue  # retain the job; the host may finish moving/flushing the transcript later
+            source_value = job.get("path") if isinstance(job, dict) else None
+            if not isinstance(source_value, str) or not source_value:
+                raise ValueError("transcript job has no source path")
+        except (ValueError, TypeError, json.JSONDecodeError):
+            spool.quarantine(job_path, prefix="transcript")
+            quarantined += 1
+            continue
+        except OSError:
+            # A transient local filesystem error is retryable; keep the job intact.
+            continue
+
+        source = Path(source_value)
+        if not source.is_file():
+            continue  # retain the job; the host may finish moving/flushing the transcript later
+        try:
             spool_transcript(
                 settings,
                 agent=str(job.get("agent") or "unknown"),
@@ -143,18 +167,31 @@ def materialize_transcript_jobs(settings: Settings, *, max_jobs: int = 8) -> int
             )
             spool.finish_transcript_job(job_path)
             materialized += 1
-        except Exception:
+        except OSError:
+            # Transcript may still be moving/flushing; retry on the next pass.
             continue
-    return materialized
+    return materialized, quarantined
 
 
 async def sync_once(settings: Settings, *, max_items: int = 100) -> dict[str, int]:
     spool = LocalSpool(settings.spool_dir)
-    materialized = materialize_transcript_jobs(settings)
-    sent = failed = 0
+    materialized, transcript_quarantined = materialize_transcript_jobs(settings)
+    sent = failed = quarantined = 0
     for path in spool.pending_paths()[:max_items]:
         try:
-            memory = MemoryPut.model_validate_json(path.read_text(encoding="utf-8"))
+            raw = path.read_text(encoding="utf-8")
+        except OSError:
+            failed += 1
+            break
+        try:
+            memory = MemoryPut.model_validate_json(raw)
+        except ValueError:
+            # A malformed local item is not a network outage. Preserve it in dead-letter
+            # storage and continue so one bad file can never brick the durable queue.
+            spool.quarantine(path)
+            quarantined += 1
+            continue
+        try:
             await push_memory(settings, memory)
             spool.mark_sent(path)
             sent += 1
@@ -164,8 +201,10 @@ async def sync_once(settings: Settings, *, max_items: int = 100) -> dict[str, in
     return {
         "sent": sent,
         "failed": failed,
+        "quarantined": quarantined,
         "pending": len(spool.pending_paths()),
         "transcripts_materialized": materialized,
+        "transcripts_quarantined": transcript_quarantined,
         "transcript_jobs": len(spool.transcript_job_paths()),
     }
 

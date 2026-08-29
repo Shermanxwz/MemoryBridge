@@ -1,0 +1,118 @@
+name: seal
+
+on:
+  push:
+    branches: [main, seal-hardening]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qdrant-e2e:
+    name: qdrant-e2e (${{ matrix.qdrant }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        qdrant: ["v1.18.3", "v1.19.0"]
+    services:
+      qdrant:
+        image: qdrant/qdrant:${{ matrix.qdrant }}
+        ports:
+          - 6333:6333
+    env:
+      MEMORYBRIDGE_E2E_QDRANT_URL: http://127.0.0.1:6333
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -U pip
+      - run: pip install -e '.[dev]'
+      - name: Real Qdrant write, fallback, snapshot, destructive restore drill
+        run: pytest -vv tests/test_e2e_qdrant.py
+
+  codex-contract:
+    name: Codex 0.150.1 capture contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: python -m pip install -U pip && pip install -e .
+      - run: npm install --global @openai/codex@0.150.1
+      - run: codex --version
+      - name: Exercise exact current SessionEnd command payload through MemoryBridge hook
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          transcript="$root/codex-session.jsonl"
+          printf '%s\n' '{"type":"message","role":"user","content":"seal codex user"}' > "$transcript"
+          printf '%s\n' '{"type":"message","role":"assistant","content":"seal codex assistant"}' >> "$transcript"
+          export MEMORYBRIDGE_SPOOL_DIR="$root/spool"
+          python - "$transcript" <<'PY' | memorybridge-codex-hook
+          import json, sys
+          print(json.dumps({
+              "session_id": "seal-codex-session",
+              "transcript_path": sys.argv[1],
+              "cwd": "/tmp",
+              "hook_event_name": "SessionEnd",
+              "reason": "other",
+          }))
+          PY
+          test "$(find "$root/spool/transcript-jobs" -name '*.json' | wc -l)" -eq 1
+          python - <<'PY'
+          from pathlib import Path
+          from memorybridge.config import Settings
+          from memorybridge.spool import LocalSpool, materialize_transcript_jobs
+          import os
+          settings = Settings(spool_dir=Path(os.environ["MEMORYBRIDGE_SPOOL_DIR"]))
+          materialized, quarantined = materialize_transcript_jobs(settings)
+          assert materialized == 1 and quarantined == 0
+          assert len(LocalSpool(settings.spool_dir).pending_paths()) >= 1
+          print("Codex SessionEnd -> fsync spool -> transcript materialization: PASS")
+          PY
+
+  openclaw-contract:
+    name: OpenClaw 2026.8.1 plugin contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: integrations/openclaw/package.json
+      - name: Install real OpenClaw package
+        working-directory: integrations/openclaw
+        run: npm install --ignore-scripts --no-save openclaw@2026.8.1
+      - name: Validate plugin with real OpenClaw CLI
+        working-directory: integrations/openclaw
+        run: ./node_modules/.bin/openclaw plugins validate --entry index.js --json
+      - name: Invoke real-shape hooks and verify fsynced capture
+        run: node tests/contracts/openclaw.mjs
+
+  hermes-contract:
+    name: Hermes 0.20.6 plugin contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -U pip
+      - name: Install MemoryBridge and real Hermes package
+        run: pip install -e . 'hermes-agent==0.20.6'
+      - name: Hermes native plugin doctor
+        run: hermes plugins doctor integrations/hermes --ci
+      - name: Real Hermes SessionDB -> MemoryBridge spool contract
+        run: python tests/contracts/hermes.py

@@ -1,0 +1,5 @@
+name: memorybridge
+version: 0.1.0
+description: Crash-safe local capture bridge for MemoryBridge
+provides_hooks:
+  - on_session_finalize
