@@ -8,7 +8,7 @@
 4. **Graceful retrieval degradation.** Agent native -> Qwen/Qdrant vector -> no-model lexical -> raw/recent.
 5. **Indexes are disposable.** Fallback collections are generation-scoped by embedding model + dimension and may
    be rebuilt or replaced without altering raw memories.
-6. **Snapshots are recoverable, exports are portable.** Every archive contains a Qdrant snapshot plus JSONL.GZ and SHA-256 manifest.
+6. **Snapshots are recoverable, exports are portable.** MemoryBridge-owned archives contain a Qdrant snapshot plus JSONL.GZ and SHA-256 manifest. An external raw-snapshot archive is verified through its own `latest.json` and sidecars.
 7. **No user-facing control plane.** No dashboard, policy evolution, ranking governance, Kafka, Redis or graph database.
 
 ## Data flow
@@ -34,6 +34,10 @@ Codex / OpenClaw / Hermes
                       |                     .snapshot + .jsonl.gz
                       v                               |
             fallback vector index                CloudDrive2
+
+The device that runs Codex/Hermes may also be an archive-verification node. It reads a server-created CloudDrive2
+archive and can restore into a dedicated temporary Qdrant, but it does not assume that a local `127.0.0.1:6333`
+endpoint is the production database.
 
 Retrieval: agent native index -> vector fallback -> lexical fallback -> raw/recent
 ```

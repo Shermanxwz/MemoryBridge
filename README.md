@@ -149,6 +149,37 @@ memorybridge archive-verify /path/to/archive/...manifest.json
 memorybridge restore-latest memorybridge_raw --force
 ```
 
+### Client/archive verification node
+
+When the server's backup job writes raw Qdrant snapshots to a CloudDrive2/FUSE mount, the client device can verify
+that external format without pretending to be the Qdrant host:
+
+```bash
+memorybridge deployment-seal \
+  --archive-dir /opt/115open/qdrant-memory-backup \
+  --archive-only
+```
+
+This read-only check validates `latest.json`, every retained `.snapshot` against its `.sha256` sidecar, the latest
+snapshot tar structure, the recorded 03:00-hour timestamp, retention inventory and owner-only permissions. The
+timestamp check proves the time of a retained artifact; it cannot prove that the server's daily job never missed a
+run. Add `--max-age-hours 30` when freshness is part of the operator's policy.
+
+For a destructive recovery drill, point the command at a dedicated temporary Qdrant instance. It generates or
+accepts only a `__memorybridge_seal_` collection name, restores the snapshot, reads it back, and confirms cleanup:
+
+```bash
+memorybridge deployment-seal \
+  --archive-dir /opt/115open/qdrant-memory-backup \
+  --drill-qdrant-url http://127.0.0.1:16333 \
+  --latest-only
+```
+
+The drill URL is never inferred from the live Qdrant URL. Do not point it at a production Qdrant. The command only
+reports full `SEALED` when archive security/integrity, an explicit live Qdrant probe, an explicit read-only MCP
+`memory_status` probe and the isolated recovery drill all pass. `python scripts/deployment_seal.py ...` is an
+equivalent checkout-local entry point.
+
 ## Zero-friction capture
 
 The important rule is **never perform network work inside a host-agent shutdown/message hook**. Hooks only fsync a
@@ -197,6 +228,7 @@ memorybridge spool-sync
 memorybridge snapshot-create
 memorybridge archive-verify <manifest>
 memorybridge restore-latest <collection> --force
+memorybridge deployment-seal --archive-dir /path/to/external-snapshot-archive --archive-only
 ```
 
 ## Failure behavior

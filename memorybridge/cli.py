@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
 from .config import Settings
+from .deployment import run_deployment_seal
 from .models import MemoryPut
 from .service import MemoryService
 from .snapshot import SnapshotManager
@@ -55,6 +57,31 @@ def build_parser() -> argparse.ArgumentParser:
 
     ix = sub.add_parser("index-once")
     ix.add_argument("--limit", type=int, default=50)
+
+    ds = sub.add_parser(
+        "deployment-seal",
+        help="Read-only client/archive seal; optional isolated Qdrant recovery drill",
+    )
+    ds.add_argument("--archive-dir", type=Path)
+    ds.add_argument("--qdrant-url", help="Explicit live Qdrant URL to probe; never inferred for this command")
+    ds.add_argument("--qdrant-api-key-env", default="MEMORYBRIDGE_QDRANT_API_KEY")
+    ds.add_argument("--mcp-url", help="Explicit MCP URL to probe with memory_status")
+    ds.add_argument("--mcp-token-env", default="MEMORYBRIDGE_MCP_TOKEN")
+    ds.add_argument("--drill-qdrant-url", help="Dedicated temporary Qdrant URL for snapshot restore/delete drill")
+    ds.add_argument("--drill-qdrant-api-key-env", default="MEMORYBRIDGE_QDRANT_API_KEY")
+    ds.add_argument("--drill-collection", help="Optional name; must start with __memorybridge_seal_")
+    ds.add_argument(
+        "--archive-only",
+        action="store_true",
+        help="Only seal the archive node; skip live probes and recovery drill",
+    )
+    ds.add_argument(
+        "--latest-only",
+        action="store_true",
+        help="Hash only the latest snapshot, not all retained snapshots",
+    )
+    ds.add_argument("--expected-backup-hour", type=int, default=3)
+    ds.add_argument("--max-age-hours", type=float)
     return p
 
 
@@ -122,6 +149,30 @@ def main() -> None:
     if args.cmd == "archive-verify":
         manager = SnapshotManager(settings)
         _print(manager.verify_manifest(Path(args.manifest)))
+        return
+    if args.cmd == "deployment-seal":
+        qdrant_url = args.qdrant_url or os.getenv("MEMORYBRIDGE_QDRANT_URL")
+        mcp_url = args.mcp_url or os.getenv("MEMORYBRIDGE_MCP_URL")
+        result = asyncio.run(
+            run_deployment_seal(
+                settings,
+                archive_dir=args.archive_dir,
+                qdrant_url=qdrant_url,
+                qdrant_api_key=os.getenv(args.qdrant_api_key_env, ""),
+                mcp_url=mcp_url,
+                mcp_token=os.getenv(args.mcp_token_env, ""),
+                drill_qdrant_url=args.drill_qdrant_url,
+                drill_qdrant_api_key=os.getenv(args.drill_qdrant_api_key_env, ""),
+                drill_collection=args.drill_collection,
+                archive_only=args.archive_only,
+                expected_hour=args.expected_backup_hour,
+                max_age_hours=args.max_age_hours,
+                verify_all=not args.latest_only,
+            )
+        )
+        _print(result)
+        if not result["deployment_sealed"]:
+            raise SystemExit(2)
         return
     asyncio.run(_async_main(args, settings))
 

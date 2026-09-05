@@ -6,5 +6,7 @@
   leaked device token immediately.
 - Use separate New API credentials with only the model permissions required for embedding.
 - CloudDrive2/archive paths contain conversations and should be encrypted/permission-restricted at rest.
+- `deployment-seal` requires the archive directory, snapshot files and sidecars to be owner-only (`0700`/`0600`);
+  a permissive FUSE mode is reported as a seal failure rather than silently treated as private.
 - Restore is intentionally never automatic or destructive: `restore-latest` refuses an existing collection unless
   `--force` is supplied and verifies the SHA-256 manifest first.

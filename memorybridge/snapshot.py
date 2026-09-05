@@ -44,6 +44,19 @@ def _fsync_dir(path: Path) -> None:
         os.close(fd)
 
 
+def _safe_archive_member(folder: Path, name: Any) -> Path:
+    """Resolve a manifest filename without allowing it to escape its archive folder."""
+    if not isinstance(name, str) or not name or name in {".", ".."}:
+        raise ValueError("archive member name must be a non-empty filename")
+    if name != Path(name).name or "/" in name or "\\" in name:
+        raise ValueError("archive member must not contain a path")
+    root = folder.resolve()
+    candidate = (folder / name).resolve()
+    if candidate.parent != root:
+        raise ValueError("archive member escapes the archive directory")
+    return folder / name
+
+
 def _canonical_point(point: dict[str, Any]) -> bytes:
     # Portable archives intentionally certify durable memory semantics (id + payload),
     # not disposable vector/HNSW implementation details.
@@ -207,8 +220,8 @@ class SnapshotManager:
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 snapshot_name = manifest.get("snapshot_name")
                 for candidate in (
-                    folder / str(snapshot_name),
-                    folder / str(manifest.get("jsonl_gz", "")),
+                    _safe_archive_member(folder, snapshot_name),
+                    _safe_archive_member(folder, manifest.get("jsonl_gz")),
                     manifest_path,
                 ):
                     if candidate.is_file():
@@ -238,8 +251,8 @@ class SnapshotManager:
     def verify_manifest(self, manifest_path: Path) -> dict[str, Any]:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         folder = manifest_path.parent
-        snap = folder / manifest["snapshot_name"]
-        export = folder / manifest["jsonl_gz"]
+        snap = _safe_archive_member(folder, manifest["snapshot_name"])
+        export = _safe_archive_member(folder, manifest["jsonl_gz"])
         snap_ok = snap.exists() and sha256_file(snap) == manifest["snapshot_sha256"]
         export_ok = export.exists() and sha256_file(export) == manifest["jsonl_gz_sha256"]
         semantic_ok: bool | None = None
@@ -265,7 +278,7 @@ class SnapshotManager:
             raise RuntimeError("target collection exists; refuse destructive restore without --force")
         if exists:
             await self.qdrant.delete_collection(collection)
-        snapshot_path = manifest_path.parent / manifest["snapshot_name"]
+        snapshot_path = _safe_archive_member(manifest_path.parent, manifest["snapshot_name"])
         result = await self.qdrant.upload_snapshot_file(
             collection, snapshot_path, checksum=manifest.get("qdrant_checksum")
         )

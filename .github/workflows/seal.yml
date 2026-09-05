@@ -66,6 +66,69 @@ jobs:
       - name: Real Qdrant write, MCP wire, fallback, snapshot, destructive restore drill
         run: pytest -vv tests/test_e2e_qdrant.py
 
+  deployment-node-contract:
+    name: external archive client-node seal contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -U pip && pip install -e .
+      - name: Verify external latest.json and snapshot sidecar format
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          export MEMORYBRIDGE_SEAL_FIXTURE="$root"
+          python - <<'PY'
+          import hashlib
+          import io
+          import json
+          import os
+          import tarfile
+          from pathlib import Path
+
+          root = Path(os.environ["MEMORYBRIDGE_SEAL_FIXTURE"])
+          snapshot = root / "memory-2026-09-05-19-15-03.snapshot"
+          with tarfile.open(snapshot, "w") as archive:
+              for name, content in {
+                  "0/segments/segment.tar": b"segment",
+                  "version.info": b"0.4.2",
+                  "config.json": b'{"params":{"vectors":{"size":768,"distance":"Cosine"}}}',
+              }.items():
+                  info = tarfile.TarInfo(name)
+                  info.size = len(content)
+                  archive.addfile(info, io.BytesIO(content))
+          digest = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+          snapshot.with_name(snapshot.name + ".sha256").write_text(
+              f"{digest}  {snapshot.name}\n", encoding="utf-8"
+          )
+          (root / "latest.json").write_text(
+              json.dumps(
+                  {
+                      "schema": 1,
+                      "collection": "memory",
+                      "snapshot_name": snapshot.name,
+                      "qdrant_creation_time_utc": "2026-09-05T19:15:03",
+                      "qdrant_creation_time_beijing": "2026-09-06T03:15:03+08:00",
+                      "qdrant_reported_size": snapshot.stat().st_size,
+                      "actual_size": snapshot.stat().st_size,
+                      "qdrant_checksum": digest,
+                      "download_sha256": digest,
+                      "clouddrive2_sha256": digest,
+                      "remote_path": f"/CloudDrive/archive/{snapshot.name}",
+                  }
+              ),
+              encoding="utf-8",
+          )
+          root.chmod(0o700)
+          for path in root.iterdir():
+              path.chmod(0o600)
+          PY
+          memorybridge deployment-seal --archive-dir "$root" --archive-only
+
   codex-contract:
     name: Codex 0.150.1 capture contract
     runs-on: ubuntu-latest

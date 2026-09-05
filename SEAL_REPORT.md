@@ -43,6 +43,20 @@ Certified jobs:
 - OpenClaw `2026.8.1-beta.3` plugin install/load/capture contract — PASS
 - Hermes upstream commit `ac6c8028e00d01ee2f299ba7fd03329c7f10382d` plugin doctor + SessionDB capture contract — PASS
 
+### Deployment-node gate
+
+The repository now includes a separate `deployment-seal` command for a device that is a client and archive
+verification node rather than the Qdrant host. It recognizes the external backup shape
+`latest.json + <snapshot>.snapshot + <snapshot>.snapshot.sha256`, verifies all retained snapshot bytes and the latest
+Qdrant tar structure, reports the mount/filesystem and permission boundary, and never assumes that local
+`127.0.0.1:6333` is production. An explicit `--drill-qdrant-url` restores only into a generated
+`__memorybridge_seal_` collection and confirms deletion afterward.
+
+The CI seal workflow includes a synthetic external-archive contract for this command. A real deployment is sealed
+only after running the command against the operator's archive, explicitly probing the live Qdrant and MCP endpoints,
+and completing the isolated recovery drill. A retained file timestamp is evidence of that artifact's creation time;
+it is not proof that every scheduled daily backup succeeded.
+
 ## What the Qdrant E2E actually destroys and recovers
 
 The Qdrant matrix is not a mock and does not stop at a snapshot API success response. It exercises real Qdrant
@@ -118,6 +132,9 @@ papered over:
 - client systemd spool configuration previously relied on shell environment inheritance; the user unit now loads an
   optional persistent `~/.config/memorybridge.env` file;
 - production-container startup had not been part of the seal gate; it now is.
+- external raw Qdrant snapshots had no repository-level client-node verifier; the read-only `deployment-seal` gate now
+  checks their pointer, sidecars, tar structure, schedule-time evidence and permission policy, with an isolated restore
+  drill that cannot target an arbitrary collection name.
 
 ## Deliberate scope boundary
 
