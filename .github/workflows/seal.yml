@@ -130,7 +130,7 @@ jobs:
           memorybridge deployment-seal --archive-dir "$root" --archive-only
 
   codex-contract:
-    name: Codex 0.150.1 capture contract
+    name: Codex 0.151.0 capture contract
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -142,7 +142,7 @@ jobs:
         with:
           node-version: "22"
       - run: python -m pip install -U pip && pip install -e .
-      - run: npm install --global @openai/codex@0.150.1
+      - run: npm install --global @openai/codex@0.151.0
       - run: codex --version
       - name: Exercise official per-turn and SessionEnd payloads through MemoryBridge
         shell: bash

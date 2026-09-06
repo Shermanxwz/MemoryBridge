@@ -304,9 +304,34 @@ codex mcp add memorybridge \
 codex mcp list
 ```
 
-For a persistent setup that does not depend on shell environment inheritance, use the checked-in header helper in
-`scripts/memorybridge_codex_headers.py` and point `http_headers_helper` at its absolute path in
-`~/.codex/config.toml`. The helper reads the protected token file and emits only the Authorization header.
+For Codex 0.151.0 and newer, use `bearer_token_env_var` rather than a header helper. The current Codex app server
+rejects `Authorization` returned by `http_headers_helper` as a reserved header, which leaves the server enabled in
+configuration but absent from the live tool catalog:
+
+```toml
+[mcp_servers.memorybridge]
+url = "https://api.example.com/memorybridge/mcp"
+bearer_token_env_var = "MEMORYBRIDGE_MCP_TOKEN"
+required = false
+```
+
+For a systemd-managed Codex Web app server, install `scripts/memorybridge_codex_app_server.sh` as
+`/usr/local/libexec/memorybridge-codex-app-server` and install
+`deploy/systemd/codex-official-app-server-memorybridge.conf` as a drop-in for the active app-server unit. The
+wrapper reads the owner-only token file and exports the value only to the Codex process. For a one-shot CLI check:
+
+```bash
+MEMORYBRIDGE_MCP_TOKEN="$(tr -d '\r\n' < ~/.config/memorybridge.token)" codex mcp list
+```
+
+The wrapper resolves `codex` from the service `PATH`; set `MEMORYBRIDGE_CODEX_BIN` in the service drop-in when the
+installed executable is outside that path.
+
+`codex mcp list` verifies the registration; the Web app-server smoke test should call its official
+`mcpServerStatus/list` method and confirm that `memorybridge` exposes tools.
+
+The older `scripts/memorybridge_codex_headers.py` helper is retained only for older Codex clients that accept an
+Authorization header from a helper; do not use it with Codex 0.151.0 or newer.
 
 For Hermes, install the package in Hermes' Python environment, copy `integrations/hermes/` to
 `~/.hermes/plugins/memorybridge/`, enable it, and add the remote MCP server to `~/.hermes/config.yaml`. Keep the

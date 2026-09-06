@@ -138,6 +138,26 @@ the two audited MemoryBridge trees. The active `memorybridge:7f1191b88663` image
 data, logs, backup staging directory, Qdrant, New API, and unrelated services were retained. No global Docker prune
 was run.
 
+### Codex Web MCP compatibility closure (2026-09-06)
+
+The public `clawdbot.230385.xyz` Web instance was traced to the VPS Nginx route, `/opt/codex-app-server-web` on
+`127.0.0.1:4173`, and its separate official Codex app-server on `127.0.0.1:43999`. Its initial `unknown`/
+`inactive` MemoryBridge state was caused by Codex 0.151.0 rejecting `Authorization` emitted by the legacy
+`http_headers_helper` as a reserved header. Because the MCP entry was optional, the service stayed nominally enabled
+while its tools were absent from the live catalog.
+
+The repository now uses `bearer_token_env_var`, adds an owner-only token-file wrapper for systemd-managed app-server
+processes, documents the version boundary, and includes a wrapper regression test. The VPS configuration was
+updated to the same bearer-token path, with an explicit `/usr/bin/codex` executable override for that host. Both
+user services were reloaded and restarted successfully; no new reserved-header error appeared afterward.
+
+The real public Web path then passed: authenticated login HTTP 200; official `mcpServerStatus/list` HTTP 200 with
+`memorybridge`, `authStatus=bearerToken`, and 8 tools; an ephemeral `/tmp` thread start HTTP 200; and
+`mcpServer/tool/call(memory_status)` HTTP 200 with `isError=false`. The Web write control was enabled for this tool
+call while autonomous/unattended mode remained disabled. The probe was read-only and made no production collection
+write. Local and VPS Hermes MCP tests both connected and discovered all 8 tools, and the Hermes plugin doctor passed.
+The checked-in seal workflow now pins Codex 0.151.0 so this compatibility fix is covered by the next public CI run.
+
 MCP URL knowledge alone still does not imply automatic capture: a future device must be issued a bearer token and
 install its native adapter plus local spool daemon. A valid bearer token authorizes reads and writes, so per-device
 tokens and rotation after exposure remain mandatory.

@@ -1,5 +1,7 @@
 import asyncio
+import os
 import stat
+import subprocess
 from pathlib import Path
 
 from mcp.server import MCPServer
@@ -67,6 +69,35 @@ def test_client_token_file_requires_owner_only(tmp_path: Path, monkeypatch):
     assert _client_token() == "device-token"
     token_file.chmod(0o644)
     assert _client_token() == ""
+
+
+def test_codex_app_server_wrapper_exports_token(tmp_path: Path):
+    token_file = tmp_path / "memorybridge.token"
+    token_file.write_text("device-token\n", encoding="utf-8")
+    token_file.chmod(0o600)
+    fake_codex = tmp_path / "codex"
+    fake_codex.write_text(
+        '#!/bin/sh\n[ "$MEMORYBRIDGE_MCP_TOKEN" = "device-token" ]\n[ "$1" = "app-server" ]\n',
+        encoding="utf-8",
+    )
+    fake_codex.chmod(0o700)
+    wrapper = Path(__file__).parents[1] / "scripts/memorybridge_codex_app_server.sh"
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "HOME": str(tmp_path),
+            "MEMORYBRIDGE_MCP_TOKEN_FILE": str(token_file),
+            "MEMORYBRIDGE_CODEX_BIN": str(fake_codex),
+        }
+    )
+    result = subprocess.run(
+        ["sh", str(wrapper), "app-server"],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_transcript_job_is_small_and_replaceable(tmp_path: Path):

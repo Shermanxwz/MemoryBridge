@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Print the local MemoryBridge bearer header for Codex's HTTP MCP client."""
+"""Legacy bearer-header helper for older Codex HTTP MCP clients.
+
+Codex 0.151.0 and newer reserve Authorization when it comes from a header helper. Use
+``bearer_token_env_var`` plus the app-server wrapper for current Codex deployments.
+"""
 from __future__ import annotations
 
 import json
