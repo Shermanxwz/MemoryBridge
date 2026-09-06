@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily MemoryBridge Qdrant raw/meta snapshot timer
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+Persistent=true
+AccuracySec=1min
+Unit=memorybridge-cloud-backup.service
+
+[Install]
+WantedBy=timers.target

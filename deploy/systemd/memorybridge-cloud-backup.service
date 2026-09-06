@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily MemoryBridge Qdrant raw/meta snapshots to CloudDrive2
+Documentation=https://qdrant.tech/documentation/concepts/snapshots/
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/sbin/memorybridge-cloud-backup.py
+EnvironmentFile=-/etc/memorybridge-cloud-backup.env
+TimeoutStartSec=2h

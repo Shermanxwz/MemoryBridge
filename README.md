@@ -125,6 +125,21 @@ device and rotate a leaked token immediately.
 The worker is intentionally boring: it retries pending vector indexing and periodically creates archives. Point
 `MEMORYBRIDGE_ARCHIVE_DIR` at a CloudDrive2-mounted directory if desired.
 
+The operator's existing Qdrant backup may cover a separate pre-existing collection. Install the additive host
+backup unit below so MemoryBridge's own durable `memorybridge_raw` records and `memorybridge_meta` sequence/ack
+metadata are archived to the same CloudDrive2 tree without changing that existing job:
+
+```bash
+sudo deploy/install-memorybridge-cloud-backup.sh
+sudo systemctl start memorybridge-cloud-backup.service  # optional immediate first run
+```
+
+It runs daily at 03:20, after the existing 03:15 job, and writes one independently verifiable archive under
+`qdrant-memory-backup/memorybridge_raw/` and `qdrant-memory-backup/memorybridge_meta/`. Each run uploads the
+snapshot through the CloudDrive2 container, verifies the remote SHA-256 and sidecar, atomically advances that
+collection's `latest.json`, then removes only the newly created local Qdrant snapshot. A failed upload leaves the
+source snapshot available for retry and returns a failed systemd result.
+
 ## Sealed archive format
 
 For each raw/source collection the worker creates (derived fallback-vector indexes are rebuildable and are not
