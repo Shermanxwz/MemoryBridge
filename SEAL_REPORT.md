@@ -2,9 +2,13 @@
 
 Seal scope: repository behavior that can be reproduced on public CI infrastructure.
 
-Final branch commit:
+Final branch:
 
-`83698a10f17c1677991eb1eef715c99110ce23ba`
+`main`
+
+Latest executable/configuration validation commit recorded below:
+
+`6562174bbcf36d8dc57d4a62546f419863208022`
 
 Executable/configuration baseline certified before this report was added:
 
@@ -64,8 +68,8 @@ it is not proof that every scheduled daily backup succeeded.
 ### Operator deployment closure evidence (2026-09-06)
 
 The target deployment was exercised with the current device acting as a client/archive verification node and the
-private server acting as the Qdrant/MCP host. The production MemoryBridge container is running the executable
-baseline above as uid `10001`, with a read-only root filesystem, dropped Linux capabilities, `no-new-privileges`,
+private server acting as the Qdrant/MCP host. The production MemoryBridge container is running the final image
+`memorybridge:6562174` as uid `10001`, with a read-only root filesystem, dropped Linux capabilities, `no-new-privileges`,
 host-local Qdrant access, and HTTPS MCP bearer authentication. The public MCP wire path accepted authenticated
 initialize, tool discovery, durable put, deterministic duplicate replay, get, since, and lexical fallback search;
 the synthetic point was then deleted and its absence confirmed. The production collection count remained unchanged.
