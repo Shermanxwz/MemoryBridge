@@ -4,7 +4,7 @@ from pathlib import Path
 
 from mcp.server import MCPServer
 
-from memorybridge.config import Settings
+from memorybridge.config import Settings, _client_token
 from memorybridge.lexical import lexical_rank, tokens
 from memorybridge.models import MemoryPut, next_time_ns
 from memorybridge.server import build_server, transport_security
@@ -56,6 +56,17 @@ def test_spool_is_owner_only(tmp_path: Path):
 
     job = spool.queue_transcript(agent="codex", path=tmp_path / "transcript.jsonl", session_id="s")
     assert stat.S_IMODE(job.stat().st_mode) == 0o600
+
+
+def test_client_token_file_requires_owner_only(tmp_path: Path, monkeypatch):
+    token_file = tmp_path / "memorybridge.token"
+    token_file.write_text("device-token\n", encoding="utf-8")
+    monkeypatch.delenv("MEMORYBRIDGE_MCP_TOKEN", raising=False)
+    monkeypatch.setenv("MEMORYBRIDGE_MCP_TOKEN_FILE", str(token_file))
+    token_file.chmod(0o600)
+    assert _client_token() == "device-token"
+    token_file.chmod(0o644)
+    assert _client_token() == ""
 
 
 def test_transcript_job_is_small_and_replaceable(tmp_path: Path):

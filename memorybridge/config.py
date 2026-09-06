@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,30 @@ def _int(name: str, default: int) -> int:
 def _opt_int(name: str) -> int | None:
     raw = os.getenv(name)
     return None if raw in (None, "") else int(raw)
+
+
+def _client_token() -> str:
+    """Read the client bearer token without requiring it in a process environment.
+
+    Environment variables remain supported for service managers and backwards
+    compatibility. The token-file form is preferred for interactive clients:
+    it keeps the credential out of shell exports and lets the Codex header
+    helper and spool daemon share one owner-only file.
+    """
+    direct = os.getenv("MEMORYBRIDGE_MCP_TOKEN", "").strip()
+    if direct:
+        return direct
+    raw_path = os.getenv("MEMORYBRIDGE_MCP_TOKEN_FILE", "").strip()
+    if not raw_path:
+        return ""
+    path = Path(os.path.expanduser(raw_path))
+    try:
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or stat.S_IMODE(metadata.st_mode) & 0o077:
+            return ""
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +77,7 @@ class Settings:
     snapshot_collections: tuple[str, ...] = _csv("MEMORYBRIDGE_SNAPSHOT_COLLECTIONS")
 
     mcp_url: str = os.getenv("MEMORYBRIDGE_MCP_URL", "http://127.0.0.1:8765/mcp")
-    mcp_token: str = os.getenv("MEMORYBRIDGE_MCP_TOKEN", "")
+    mcp_token: str = _client_token()
     spool_dir: Path = Path(os.path.expanduser(os.getenv("MEMORYBRIDGE_SPOOL_DIR", "~/.memorybridge/spool")))
 
     @property

@@ -4,6 +4,11 @@
 - Put MemoryBridge behind HTTPS. Remote MCP should use a per-device bearer token or an external OAuth 2.1 AS.
 - `MEMORYBRIDGE_BEARER_TOKENS` is a bootstrap/static-token mode intended for a single trusted operator. Rotate a
   leaked device token immediately.
+- The MCP URL is discoverable endpoint metadata, not authorization. Any holder of a valid bearer token can read and
+  write the configured memory source; never reuse one token across unrelated devices, and never place it in a URL,
+  repository, command-line argument, or chat transcript.
+- MCP registration alone does not capture conversations. Every client that promises automatic capture must also have
+  its native lifecycle adapter, owner-only local spool, and background retry daemon enabled and health-checked.
 - Use separate New API credentials with only the model permissions required for embedding.
 - CloudDrive2/archive paths contain conversations and should be encrypted/permission-restricted at rest.
 - `deployment-seal` requires the archive directory, snapshot files and sidecars to be owner-only (`0700`/`0600`);

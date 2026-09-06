@@ -75,6 +75,20 @@ Optional fallback retrieval:
 
 Clients with a healthy native index should prefer it and may never call `memory_search`.
 
+## What "connected" means
+
+Registering an MCP URL gives an agent access to MemoryBridge tools; it does **not** let the server observe or
+capture conversations that the host agent never sends. A client is capture-enabled only when all four links exist:
+
+1. the agent's native lifecycle adapter writes each turn or finalized session;
+2. the adapter fsyncs an owner-only local spool without doing network work in the hook;
+3. a background spool daemon delivers pending records to authenticated MCP; and
+4. the server's worker asynchronously indexes stored raw records.
+
+`memory_put` is the durable write boundary. It commits raw data first, then the worker builds the configured
+generation-scoped vector index. If New API or Qdrant indexing is unavailable, the raw record remains durable and
+search falls back to lexical/raw retrieval.
+
 ## Why the local model still matters
 
 Configure your New API/OpenAI-compatible endpoint:
@@ -257,6 +271,67 @@ cp deploy/systemd/memorybridge-spool.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now memorybridge-spool.service
 ```
+
+### Self-serve client enrollment
+
+The URL alone is not a credential and is never sufficient for a client enrollment. The endpoint requires HTTPS and
+a bearer token; possession of a token authorizes MemoryBridge reads and writes, so issue one distinct token per
+device and rotate it immediately if exposed. Do not put a token in a repository, shell history, process argument, or
+chat message.
+
+After installing this package in the same environment as the host agent, put the device token in an owner-only file
+and create the client environment file:
+
+```bash
+install -d -m 700 ~/.config ~/.memorybridge/spool
+install -m 600 /dev/null ~/.config/memorybridge.token
+# Edit ~/.config/memorybridge.token with the device token, then:
+cat > ~/.config/memorybridge.env <<'EOF'
+MEMORYBRIDGE_MCP_URL=https://api.example.com/memorybridge/mcp
+MEMORYBRIDGE_MCP_TOKEN_FILE=~/.config/memorybridge.token
+MEMORYBRIDGE_SPOOL_DIR=~/.memorybridge/spool
+EOF
+chmod 600 ~/.config/memorybridge.env
+```
+
+For Codex, configure the MCP server and merge `integrations/codex/hooks.json.example` into `~/.codex/hooks.json`
+without replacing unrelated hooks. The current Codex CLI form is:
+
+```bash
+codex mcp add memorybridge \
+  --url https://api.example.com/memorybridge/mcp \
+  --bearer-token-env-var MEMORYBRIDGE_MCP_TOKEN
+codex mcp list
+```
+
+For a persistent setup that does not depend on shell environment inheritance, use the checked-in header helper in
+`scripts/memorybridge_codex_headers.py` and point `http_headers_helper` at its absolute path in
+`~/.codex/config.toml`. The helper reads the protected token file and emits only the Authorization header.
+
+For Hermes, install the package in Hermes' Python environment, copy `integrations/hermes/` to
+`~/.hermes/plugins/memorybridge/`, enable it, and add the remote MCP server to `~/.hermes/config.yaml`. Keep the
+token in `~/.hermes/.env` with mode `0600`:
+
+```yaml
+mcp_servers:
+  memorybridge:
+    url: https://api.example.com/memorybridge/mcp
+    headers:
+      Authorization: "Bearer ${MCP_MEMORYBRIDGE_API_KEY}"
+    enabled: true
+```
+
+Then validate both halves:
+
+```bash
+hermes plugins doctor ~/.hermes/plugins/memorybridge --ci
+hermes mcp test memorybridge
+memorybridge status
+```
+
+MCP registration without the native hook/plugin is a tool-connected client, not an automatically captured client.
+OpenClaw follows the same rule: install its typed capture plugin and run its MCP probe. The server cannot make an
+arbitrary MCP consumer auto-capture because MCP has no access to that consumer's conversation lifecycle.
 
 Integration examples live in `integrations/`:
 

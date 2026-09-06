@@ -117,6 +117,31 @@ window. The permission gate is now satisfied on the dedicated verification mount
 boundaries, not repository blockers. Do not change the verifier to ignore the schedule boundary; rerun the seal
 command after the first scheduled run.
 
+### Server-side agent enrollment and residue cleanup (2026-09-06)
+
+The private server's own Codex and Hermes clients are now capture-enabled, not merely MCP-tool-enabled. Codex has
+the three native local-fsync hooks under `/root/.codex/hooks.json`; Hermes has the enabled native
+`on_session_finalize` plugin under `/root/.hermes/plugins/memorybridge/`; and the owner-only root spool daemon is
+enabled as `memorybridge-spool-root.service`. The server-side Hermes plugin doctor passed, Hermes MCP discovered all
+8 MemoryBridge tools, and both the Codex hook and Hermes `SessionDB` capture contracts passed in isolated temporary
+spools.
+
+A disposable Qdrant plus disposable MCP container drill then exercised server Codex hook -> local spool -> authenticated
+MCP -> Qdrant -> asynchronous 1024-dimensional fallback index. The test read the record back through MCP, confirmed
+index completion, deleted the exact raw point, and confirmed it was absent. The disposable containers and spool were
+removed; the production Qdrant remained at its pre-drill counts (`sherman_memory=27866`, `memorybridge_raw=0`,
+`memorybridge_meta=1`).
+
+The residue audit removed only stopped MemoryBridge rollback containers, their six unreferenced historical tagged
+images, three unreferenced `/tmp` audit files, superseded environment/config backups, and interpreter caches under
+the two audited MemoryBridge trees. The active `memorybridge:7f1191b88663` image, current configuration, archive
+data, logs, backup staging directory, Qdrant, New API, and unrelated services were retained. No global Docker prune
+was run.
+
+MCP URL knowledge alone still does not imply automatic capture: a future device must be issued a bearer token and
+install its native adapter plus local spool daemon. A valid bearer token authorizes reads and writes, so per-device
+tokens and rotation after exposure remain mandatory.
+
 ## What the Qdrant E2E actually destroys and recovers
 
 The Qdrant matrix is not a mock and does not stop at a snapshot API success response. It exercises real Qdrant
