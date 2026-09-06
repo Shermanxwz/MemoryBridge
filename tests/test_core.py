@@ -6,7 +6,7 @@ from mcp.server import MCPServer
 from memorybridge.config import Settings
 from memorybridge.lexical import lexical_rank, tokens
 from memorybridge.models import MemoryPut, next_time_ns
-from memorybridge.server import build_server
+from memorybridge.server import build_server, transport_security
 from memorybridge.spool import LocalSpool
 
 
@@ -59,3 +59,11 @@ def test_server_constructs_with_declared_mcp_sdk():
         assert isinstance(server, MCPServer)
     finally:
         asyncio.run(server._memorybridge_service.close())
+
+
+def test_server_allows_configured_reverse_proxy_host_only():
+    settings = Settings(public_mcp_url="https://memory.example.com/memorybridge/mcp")
+    security = transport_security(settings)
+    assert "memory.example.com" in security.allowed_hosts
+    assert "127.0.0.1" in security.allowed_hosts
+    assert "untrusted.example.com" not in security.allowed_hosts

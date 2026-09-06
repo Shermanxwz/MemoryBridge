@@ -3,10 +3,12 @@ from __future__ import annotations
 import hmac
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 
 from mcp.server import MCPServer
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import AnyHttpUrl
 
 from .config import Settings
@@ -23,6 +25,22 @@ class StaticTokenVerifier(TokenVerifier):
             if hmac.compare_digest(token, expected):
                 return AccessToken(token=token, client_id=f"memorybridge-device-{idx+1}", scopes=["memory"])
         return None
+
+
+def transport_security(settings: Settings) -> TransportSecuritySettings:
+    """Allow the bound host and the configured reverse-proxy host only."""
+    public = urlparse(settings.public_mcp_url)
+    hosts = {
+        "localhost",
+        "127.0.0.1",
+        settings.host,
+        f"{settings.host}:{settings.port}",
+    }
+    if public.hostname:
+        hosts.add(public.hostname)
+    if public.netloc:
+        hosts.add(public.netloc)
+    return TransportSecuritySettings(allowed_hosts=sorted(hosts))
 
 
 def build_server(settings: Settings | None = None) -> MCPServer:
@@ -129,6 +147,7 @@ def main() -> None:
         streamable_http_path="/mcp",
         stateless_http=True,
         json_response=True,
+        transport_security=transport_security(settings),
     )
 
 
