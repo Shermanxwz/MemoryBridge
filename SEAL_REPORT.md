@@ -12,7 +12,7 @@ Latest deployed executable/configuration commit recorded below:
 
 Latest repository code commit validated by the same CI and seal workflows:
 
-`6415ad6b7e5dbeb8c6533a4976d73da6f56009e0`
+`2a4373ef1f49e891a0bb14a65588e116a2f556b9`
 
 The deployed server image is `memorybridge:7f1191b88663`; its executable content includes the client spool
 hardening validated at `6415ad6`.
@@ -35,7 +35,7 @@ was called sealed.
 
 ### CI
 
-GitHub Actions run `34030607971` completed successfully for the final report commit.
+GitHub Actions run `34035596553` completed successfully for the capture-enrollment update.
 
 Matrix:
 
@@ -46,7 +46,7 @@ Matrix:
 
 ### Seal workflow
 
-GitHub Actions run `34030607953` completed successfully for the final report commit.
+GitHub Actions run `34035596559` completed successfully for the capture-enrollment update.
 
 Certified jobs:
 
