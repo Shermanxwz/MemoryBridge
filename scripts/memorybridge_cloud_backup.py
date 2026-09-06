@@ -15,7 +15,6 @@ import hashlib
 import json
 import logging
 import os
-from pathlib import Path
 import shlex
 import subprocess
 import sys
@@ -24,6 +23,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 QDRANT_BASE = os.getenv("MEMORYBRIDGE_BACKUP_QDRANT_URL", "http://127.0.0.1:6333").rstrip("/")
 COLLECTIONS = tuple(
@@ -40,7 +40,7 @@ LOCK_PATH = Path(os.getenv("MEMORYBRIDGE_BACKUP_LOCK", "/run/lock/memorybridge-b
 LOG_PATH = os.getenv("MEMORYBRIDGE_BACKUP_LOG", "/var/log/memorybridge-backup.log")
 CHUNK_SIZE = 8 * 1024 * 1024
 BEIJING = dt.timezone(dt.timedelta(hours=8), "Asia/Shanghai")
-UTC = dt.timezone.utc
+UTC = dt.UTC
 
 
 def setup_logging() -> logging.Logger:
