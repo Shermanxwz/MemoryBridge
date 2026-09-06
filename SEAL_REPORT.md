@@ -10,6 +10,13 @@ Latest executable/configuration validation commit recorded below:
 
 `6562174bbcf36d8dc57d4a62546f419863208022`
 
+Latest repository commit validated by the same CI and seal workflows:
+
+`ae6693e031b1f493d612cf5addb04e579b76cbb1`
+
+That commit is documentation-only relative to the deployed executable image; the operator server remains on the
+validated image built from `6562174`.
+
 Executable/configuration baseline certified before this report was added:
 
 `01776b9057de7d8d0a5c4a18c151ba854d169631`
@@ -28,7 +35,7 @@ was called sealed.
 
 ### CI
 
-GitHub Actions run `34024505555` completed successfully for the final branch commit.
+GitHub Actions run `34029738692` completed successfully for the latest repository commit.
 
 Matrix:
 
@@ -39,7 +46,7 @@ Matrix:
 
 ### Seal workflow
 
-GitHub Actions run `34024505611` completed successfully for the final branch commit.
+GitHub Actions run `34029738694` completed successfully for the latest repository commit.
 
 Certified jobs:
 
