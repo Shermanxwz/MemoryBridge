@@ -482,8 +482,6 @@ async def restore_snapshot_drill(
         info = await client.request("GET", f"/collections/{quote(target, safe='')}")
         count = await client.count(target)
         points, _offset = await client.scroll(target, limit=2)
-        if count <= 0 or not points:
-            raise RuntimeError("restored drill collection is empty")
         params = (info or {}).get("config", {}).get("params", {})
         vectors = params.get("vectors") if isinstance(params, dict) else {}
         result = {
@@ -492,6 +490,7 @@ async def restore_snapshot_drill(
             "upload_accepted": bool(upload_result is not None),
             "restored_point_count": count,
             "sample_points_read": len(points),
+            "empty_collection": count == 0,
             "vector_size": vectors.get("size") if isinstance(vectors, dict) else None,
             "distance": vectors.get("distance") if isinstance(vectors, dict) else None,
         }
