@@ -6,16 +6,16 @@ Final branch:
 
 `main`
 
-Latest executable/configuration validation commit recorded below:
+Latest deployed executable/configuration commit recorded below:
 
-`6562174bbcf36d8dc57d4a62546f419863208022`
+`7f1191b88663096826b594d07091c9f6d0e28c43`
 
 Latest repository code commit validated by the same CI and seal workflows:
 
 `6415ad6b7e5dbeb8c6533a4976d73da6f56009e0`
 
-That commit hardens the client-side local spool permissions; the operator server remains on the validated executable
-image built from `6562174`.
+The deployed server image is `memorybridge:7f1191b88663`; its executable content includes the client spool
+hardening validated at `6415ad6`.
 
 Executable/configuration baseline certified before this report was added:
 
@@ -35,7 +35,7 @@ was called sealed.
 
 ### CI
 
-GitHub Actions run `34030486110` completed successfully for the latest repository code commit.
+GitHub Actions run `34030607971` completed successfully for the final report commit.
 
 Matrix:
 
@@ -46,7 +46,7 @@ Matrix:
 
 ### Seal workflow
 
-GitHub Actions run `34030486163` completed successfully for the latest repository code commit.
+GitHub Actions run `34030607953` completed successfully for the final report commit.
 
 Certified jobs:
 
@@ -76,7 +76,7 @@ it is not proof that every scheduled daily backup succeeded.
 
 The target deployment was exercised with the current device acting as a client/archive verification node and the
 private server acting as the Qdrant/MCP host. The production MemoryBridge container is running the final image
-`memorybridge:6562174` as uid `10001`, with a read-only root filesystem, dropped Linux capabilities, `no-new-privileges`,
+`memorybridge:7f1191b88663` as the non-root `memorybridge` user, with a read-only root filesystem, dropped Linux capabilities, `no-new-privileges`,
 host-local Qdrant access, and HTTPS MCP bearer authentication. The public MCP wire path accepted authenticated
 initialize, tool discovery, durable put, deterministic duplicate replay, get, since, and lexical fallback search;
 the synthetic point was then deleted and its absence confirmed. The production collection count remained unchanged.
