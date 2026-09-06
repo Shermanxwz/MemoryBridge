@@ -4,13 +4,13 @@ Seal scope: repository behavior that can be reproduced on public CI infrastructu
 
 Executable/configuration baseline certified before this report was added:
 
-`6028079bd17a4d4f2d1db026b4bef6af0b70f38a`
+`01776b9057de7d8d0a5c4a18c151ba854d169631`
 
-Certification date: 2026-08-29.
+Certification date: 2026-09-06.
 
 ## Verdict
 
-**Repository seal candidate: PASS.**
+**Repository seal: PASS. Operator deployment: NOT_SEALED under the strict deployment gate.**
 
 The baseline above passed both the ordinary CI matrix and the destructive/contract `seal` workflow. This report is
 documentation-only; after it is committed, the same workflows must pass again on the final branch commit and then
@@ -20,7 +20,7 @@ again after fast-forwarding `main` before the repository is called sealed.
 
 ### CI
 
-GitHub Actions run `33242349401` completed successfully for the baseline above.
+GitHub Actions run `34023944069` completed successfully for the executable baseline above.
 
 Matrix:
 
@@ -31,7 +31,7 @@ Matrix:
 
 ### Seal workflow
 
-GitHub Actions run `33242349420` completed successfully for the same baseline.
+GitHub Actions run `34023944063` completed successfully for the same executable baseline.
 
 Certified jobs:
 
@@ -56,6 +56,35 @@ The CI seal workflow includes a synthetic external-archive contract for this com
 only after running the command against the operator's archive, explicitly probing the live Qdrant and MCP endpoints,
 and completing the isolated recovery drill. A retained file timestamp is evidence of that artifact's creation time;
 it is not proof that every scheduled daily backup succeeded.
+
+### Operator deployment closure evidence (2026-09-06)
+
+The target deployment was exercised with the current device acting as a client/archive verification node and the
+private server acting as the Qdrant/MCP host. The production MemoryBridge container is running the executable
+baseline above as uid `10001`, with a read-only root filesystem, dropped Linux capabilities, `no-new-privileges`,
+host-local Qdrant access, and HTTPS MCP bearer authentication. The public MCP wire path accepted authenticated
+initialize, tool discovery, durable put, deterministic duplicate replay, get, since, and lexical fallback search;
+the synthetic point was then deleted and its absence confirmed. The production collection count remained unchanged.
+
+The existing server backup timer is configured for 03:15 Asia/Shanghai and its latest observed run succeeded. An
+additive `memorybridge-cloud-backup.timer` now runs at 03:20 and archives both `memorybridge_raw` and
+`memorybridge_meta` under the existing CloudDrive2 tree. An immediate run verified both local Qdrant snapshot
+downloads against Qdrant and CloudDrive2 SHA-256 values, published sidecars and `latest.json` atomically, and
+removed only the newly created local snapshots. The client mount read both new archive families with valid hashes,
+sidecars, tar structure, and freshness.
+
+For the destructive drill, secure temporary copies of the raw and metadata archives were restored into a dedicated
+temporary Qdrant instance and uniquely prefixed collections. The empty raw collection and one-point metadata
+collection both restored successfully; both temporary collections were deleted and the production Qdrant was never
+used as the drill target. Codex per-turn/SessionEnd capture and Hermes SessionDB finalize capture each traversed
+local fsync spool -> authenticated MCP -> Qdrant and were then cleaned up by exact point id.
+
+The strict operator deployment gate remains `NOT_SEALED`: CloudDrive2/FUSE presents the mounted archive directory
+and files as mode 0755, and the mount's `chmod` behavior did not provide a stable owner-only result. The new 03:20
+timer has also not yet supplied a naturally scheduled artifact at the time of this report; the immediate run was
+deliberately outside the schedule window. These are deployment-state boundaries, not repository blockers. Do not
+change the verifier to ignore them; tighten the CloudDrive2 mount policy and rerun the seal command after the first
+scheduled run.
 
 ## What the Qdrant E2E actually destroys and recovers
 
