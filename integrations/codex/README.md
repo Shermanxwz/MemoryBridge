@@ -57,4 +57,9 @@ Verify the capture half and the delivery half independently: invoke the hook wit
 spool during installation, then use `memorybridge status` to confirm the authenticated server is reachable. The
 server worker indexes raw records asynchronously; capture remains successful while indexing is pending.
 
+If a local wrapper loads `~/.config/memorybridge.env`, it must preserve an explicitly supplied
+`MEMORYBRIDGE_SPOOL_DIR`. The repository includes `scripts/memorybridge_codex_hook.sh` for that purpose; use
+`MEMORYBRIDGE_CODEX_HOOK_BIN` when the installed entry point is outside `~/.local/share/memorybridge/venv/bin`. This
+prevents an isolated capture test from accidentally targeting the production spool.
+
 For retrieval, use Codex native Memories/index first when available. `memory_search` is the server-side fallback.
