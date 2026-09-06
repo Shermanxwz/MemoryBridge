@@ -1,4 +1,5 @@
 import asyncio
+import stat
 from pathlib import Path
 
 from mcp.server import MCPServer
@@ -40,6 +41,21 @@ def test_spool_is_idempotent(tmp_path: Path):
     p2 = spool.put(item)
     assert p1 == p2
     assert len(spool.pending_paths()) == 1
+
+
+def test_spool_is_owner_only(tmp_path: Path):
+    spool = LocalSpool(tmp_path)
+    assert stat.S_IMODE(spool.root.stat().st_mode) == 0o700
+    assert stat.S_IMODE(spool.pending.stat().st_mode) == 0o700
+    assert stat.S_IMODE(spool.sent.stat().st_mode) == 0o700
+
+    pending = spool.put(MemoryPut(content="private", idempotency_key="private"))
+    assert stat.S_IMODE(pending.stat().st_mode) == 0o600
+    spool.mark_sent(pending)
+    assert stat.S_IMODE((spool.sent / pending.name).stat().st_mode) == 0o600
+
+    job = spool.queue_transcript(agent="codex", path=tmp_path / "transcript.jsonl", session_id="s")
+    assert stat.S_IMODE(job.stat().st_mode) == 0o600
 
 
 def test_transcript_job_is_small_and_replaceable(tmp_path: Path):

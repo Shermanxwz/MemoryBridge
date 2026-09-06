@@ -39,10 +39,18 @@ class LocalSpool:
         self.sent = root / "sent"
         self.failed = root / "failed"
         self.transcript_jobs = root / "transcript-jobs"
+        self.root.mkdir(parents=True, exist_ok=True)
+        os.chmod(self.root, 0o700)
         self.pending.mkdir(parents=True, exist_ok=True)
         self.sent.mkdir(parents=True, exist_ok=True)
         self.failed.mkdir(parents=True, exist_ok=True)
         self.transcript_jobs.mkdir(parents=True, exist_ok=True)
+        for directory in (self.pending, self.sent, self.failed, self.transcript_jobs):
+            os.chmod(directory, 0o700)
+            # Tighten receipts/jobs created by an older version on service startup.
+            for child in directory.iterdir():
+                if not child.is_symlink() and child.is_file():
+                    os.chmod(child, 0o600)
 
     def put(self, memory: MemoryPut) -> Path:
         event_id = memory.idempotency_key or uuid.uuid4().hex
@@ -53,6 +61,7 @@ class LocalSpool:
         tmp = self.pending / f".{safe_id}.{os.getpid()}.tmp"
         payload = memory.model_dump(mode="json")
         with tmp.open("w", encoding="utf-8") as fh:
+            os.fchmod(fh.fileno(), 0o600)
             json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
             fh.flush()
             os.fsync(fh.fileno())
@@ -78,6 +87,7 @@ class LocalSpool:
         }
         tmp = self.transcript_jobs / f".{safe_id}.{os.getpid()}.tmp"
         with tmp.open("w", encoding="utf-8") as fh:
+            os.fchmod(fh.fileno(), 0o600)
             json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
             fh.flush()
             os.fsync(fh.fileno())
@@ -101,6 +111,7 @@ class LocalSpool:
         if target.exists():
             target = self.failed / f"{prefix}-{uuid.uuid4().hex}-{path.name}"
         os.replace(path, target)
+        os.chmod(target, 0o600)
         _fsync_dir(path.parent)
         _fsync_dir(self.failed)
         return target
@@ -108,6 +119,7 @@ class LocalSpool:
     def mark_sent(self, path: Path) -> None:
         target = self.sent / path.name
         os.replace(path, target)
+        os.chmod(target, 0o600)
         _fsync_dir(self.pending)
         _fsync_dir(self.sent)
         # Sent receipts are useful for short-term diagnosis but bounded automatically.
