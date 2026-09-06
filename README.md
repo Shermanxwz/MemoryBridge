@@ -83,7 +83,13 @@ Configure your New API/OpenAI-compatible endpoint:
 MEMORYBRIDGE_EMBED_BASE_URL=https://your-new-api/v1
 MEMORYBRIDGE_EMBED_API_KEY=...
 MEMORYBRIDGE_EMBED_MODEL=qwen3-embedding:0.6b
+MEMORYBRIDGE_EMBED_DIM=1024
 ```
+
+In the current deployment, `TYC-Memory-Embedding` is the New API channel label; the model sent to the
+OpenAI-compatible `/embeddings` endpoint is `qwen3-embedding:0.6b`, which returns 1024-dimensional vectors. The
+`TYC-Memory-Analysis` channel is not on MemoryBridge's reliability path; it may be used by an agent or curator for
+optional analysis without affecting capture, storage or recovery.
 
 The worker asynchronously builds a generation-scoped fallback collection such as
 `memorybridge_fallback__<model-hash>__<dimension>`. A model/dimension change therefore creates a fresh disposable
@@ -169,23 +175,48 @@ memorybridge restore-latest memorybridge_raw --force
 When the server's backup job writes raw Qdrant snapshots to a CloudDrive2/FUSE mount, the client device can verify
 that external format without pretending to be the Qdrant host:
 
+For a strict client-side permission boundary, add a dedicated read-only CloudDrive2 mount for the backup subtree.
+CloudDrive2's Linux advanced mount settings support an explicit UID, GID and permission mode; keep the broad
+interactive mount separate from this verification mount:
+
+```toml
+[[mount_points]]
+name = "MemoryBridge archive verifier"
+source_path = "/115open/qdrant-memory-backup"
+mount_point = "/opt/memorybridge-archive"
+read_only = true
+uid = 0
+gid = 0
+permission = "0700"
+local_mount = false
+auto_mount = true
+```
+
+Then verify each collection directory independently:
+
 ```bash
 memorybridge deployment-seal \
-  --archive-dir /opt/115open/qdrant-memory-backup \
+  --archive-dir /opt/memorybridge-archive/memorybridge_raw \
+  --archive-only
+
+memorybridge deployment-seal \
+  --archive-dir /opt/memorybridge-archive/memorybridge_meta \
   --archive-only
 ```
 
 This read-only check validates `latest.json`, every retained `.snapshot` against its `.sha256` sidecar, the latest
 snapshot tar structure, the recorded 03:00-hour timestamp, retention inventory and owner-only permissions. The
 timestamp check proves the time of a retained artifact; it cannot prove that the server's daily job never missed a
-run. Add `--max-age-hours 30` when freshness is part of the operator's policy.
+run. Add `--max-age-hours 30` when freshness is part of the operator's policy. The ordinary broad CloudDrive2 mount
+may still use its interactive permissions; the dedicated verification mount is the one covered by the owner-only
+seal gate.
 
 For a destructive recovery drill, point the command at a dedicated temporary Qdrant instance. It generates or
 accepts only a `__memorybridge_seal_` collection name, restores the snapshot, reads it back, and confirms cleanup:
 
 ```bash
 memorybridge deployment-seal \
-  --archive-dir /opt/115open/qdrant-memory-backup \
+  --archive-dir /opt/memorybridge-archive/memorybridge_raw \
   --drill-qdrant-url http://127.0.0.1:16333 \
   --latest-only
 ```

@@ -2,6 +2,10 @@
 
 Seal scope: repository behavior that can be reproduced on public CI infrastructure.
 
+Final branch commit:
+
+`83698a10f17c1677991eb1eef715c99110ce23ba`
+
 Executable/configuration baseline certified before this report was added:
 
 `01776b9057de7d8d0a5c4a18c151ba854d169631`
@@ -12,15 +16,15 @@ Certification date: 2026-09-06.
 
 **Repository seal: PASS. Operator deployment: NOT_SEALED under the strict deployment gate.**
 
-The baseline above passed both the ordinary CI matrix and the destructive/contract `seal` workflow. This report is
-documentation-only; after it is committed, the same workflows must pass again on the final branch commit and then
-again after fast-forwarding `main` before the repository is called sealed.
+The executable baseline passed both the ordinary CI matrix and the destructive/contract `seal` workflow. The final
+branch commit adds the report/configuration documentation and passed the same workflows again before the repository
+was called sealed.
 
 ## Reproducible evidence
 
 ### CI
 
-GitHub Actions run `34023944069` completed successfully for the executable baseline above.
+GitHub Actions run `34024505555` completed successfully for the final branch commit.
 
 Matrix:
 
@@ -31,7 +35,7 @@ Matrix:
 
 ### Seal workflow
 
-GitHub Actions run `34023944063` completed successfully for the same executable baseline.
+GitHub Actions run `34024505611` completed successfully for the final branch commit.
 
 Certified jobs:
 
@@ -79,12 +83,23 @@ collection both restored successfully; both temporary collections were deleted a
 used as the drill target. Codex per-turn/SessionEnd capture and Hermes SessionDB finalize capture each traversed
 local fsync spool -> authenticated MCP -> Qdrant and were then cleaned up by exact point id.
 
-The strict operator deployment gate remains `NOT_SEALED`: CloudDrive2/FUSE presents the mounted archive directory
-and files as mode 0755, and the mount's `chmod` behavior did not provide a stable owner-only result. The new 03:20
-timer has also not yet supplied a naturally scheduled artifact at the time of this report; the immediate run was
-deliberately outside the schedule window. These are deployment-state boundaries, not repository blockers. Do not
-change the verifier to ignore them; tighten the CloudDrive2 mount policy and rerun the seal command after the first
-scheduled run.
+The New API route was then exercised on the private server with its active token: the channel labelled
+`TYC-Memory-Embedding` accepts the request model `qwen3-embedding:0.6b` and returned a 1024-dimensional vector.
+The production MemoryBridge image was rebuilt with `MEMORYBRIDGE_EMBED_BASE_URL=http://127.0.0.1:8199/v1`, the
+provider model and dimension, and a real temporary raw point was sent through the public MCP endpoint. Its
+asynchronous fallback index was created, `memory_search` returned `mode=vector`, and the raw point plus disposable
+fallback collection were removed afterward. `TYC-Memory-Analysis` is intentionally not a MemoryBridge dependency.
+
+The client/archive device now has a separate read-only CloudDrive2 mount for `/115open/qdrant-memory-backup` with
+UID/GID 0 and permission `0700`; both `memorybridge_raw` and `memorybridge_meta` are readable there with secure
+owner-only modes and valid integrity/freshness checks. The server-side CloudDrive2 mount was also configured with
+permission `0700`, with its prior configuration preserved before the change.
+
+The strict operator deployment gate remains `NOT_SEALED` only because the new 03:20 timer has not yet supplied a
+naturally scheduled artifact at the time of this report; the immediate run was deliberately outside the schedule
+window. The permission gate is now satisfied on the dedicated verification mount. These are deployment-state
+boundaries, not repository blockers. Do not change the verifier to ignore the schedule boundary; rerun the seal
+command after the first scheduled run.
 
 ## What the Qdrant E2E actually destroys and recovers
 
@@ -170,8 +185,8 @@ papered over:
 This seal does **not** claim that infrastructure unavailable to GitHub-hosted runners has been tested. In
 particular, it does not certify the operator's private deployment of:
 
-- the real New API endpoint and its `qwen3-embedding:0.6b` model;
-- the real CloudDrive2/FUSE mount and its permissions/fsync semantics;
+- uninterrupted future executions of the real New API endpoint and its `qwen3-embedding:0.6b` model;
+- uninterrupted future CloudDrive2/FUSE backup executions and fsync semantics;
 - the operator's production reverse proxy/TLS configuration;
 - the operator's existing private Qdrant collections/data;
 - machine-specific service permissions, storage capacity, firewall and DNS behavior.
