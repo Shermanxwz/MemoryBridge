@@ -8,14 +8,15 @@ Final branch:
 
 Latest deployed executable/configuration commit recorded below:
 
-`7f1191b88663096826b594d07091c9f6d0e28c43`
+`0114751e9ba4168daf33dc340e011a7fbdab80a9`
 
 Latest repository code commit validated by the same CI and seal workflows:
 
-`2a4373ef1f49e891a0bb14a65588e116a2f556b9`
+`0114751e9ba4168daf33dc340e011a7fbdab80a9`
 
-The deployed server image is `memorybridge:7f1191b88663`; its executable content includes the client spool
-hardening validated at `6415ad6`.
+The deployed MemoryBridge server image remains `memorybridge:7f1191b88663`; the Codex Web configuration, wrapper,
+and repository deployment assets are at the commit above. Its executable content includes the client spool hardening
+validated at `6415ad6`.
 
 Executable/configuration baseline certified before this report was added:
 
@@ -35,7 +36,7 @@ was called sealed.
 
 ### CI
 
-GitHub Actions run `34035596553` completed successfully for the capture-enrollment update.
+GitHub Actions run `34039599661` completed successfully for the Codex Web bearer-auth fix.
 
 Matrix:
 
@@ -46,14 +47,14 @@ Matrix:
 
 ### Seal workflow
 
-GitHub Actions run `34035596559` completed successfully for the capture-enrollment update.
+GitHub Actions run `34039599680` completed successfully for the Codex Web bearer-auth fix.
 
 Certified jobs:
 
 - Production Docker image build and packaged MCP server startup as uid `10001` — PASS
 - Qdrant `v1.18.3` destructive E2E — PASS
 - Qdrant `v1.19.0` destructive E2E — PASS
-- Codex `0.150.1` native capture contract — PASS
+- Codex `0.151.0` native capture contract — PASS
 - OpenClaw `2026.7.1-2` stable plugin install/load/capture contract — PASS
 - OpenClaw `2026.8.1-beta.3` plugin install/load/capture contract — PASS
 - Hermes upstream commit `ac6c8028e00d01ee2f299ba7fd03329c7f10382d` plugin doctor + SessionDB capture contract — PASS
@@ -190,7 +191,7 @@ real Qdrant, and reads it back through MCP tools.
 
 ### Codex
 
-The seal installs the real published `@openai/codex@0.150.1` package and exercises the current lifecycle payload
+The seal installs the real published `@openai/codex@0.151.0` package and exercises the current lifecycle payload
 shapes used by MemoryBridge:
 
 - `UserPromptSubmit` -> fsync user turn locally;
