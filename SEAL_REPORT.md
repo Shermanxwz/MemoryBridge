@@ -10,12 +10,12 @@ Latest executable/configuration validation commit recorded below:
 
 `6562174bbcf36d8dc57d4a62546f419863208022`
 
-Latest repository commit validated by the same CI and seal workflows:
+Latest repository code commit validated by the same CI and seal workflows:
 
-`ae6693e031b1f493d612cf5addb04e579b76cbb1`
+`6415ad6b7e5dbeb8c6533a4976d73da6f56009e0`
 
-That commit is documentation-only relative to the deployed executable image; the operator server remains on the
-validated image built from `6562174`.
+That commit hardens the client-side local spool permissions; the operator server remains on the validated executable
+image built from `6562174`.
 
 Executable/configuration baseline certified before this report was added:
 
@@ -35,7 +35,7 @@ was called sealed.
 
 ### CI
 
-GitHub Actions run `34029738692` completed successfully for the latest repository commit.
+GitHub Actions run `34030486110` completed successfully for the latest repository code commit.
 
 Matrix:
 
@@ -46,7 +46,7 @@ Matrix:
 
 ### Seal workflow
 
-GitHub Actions run `34029738694` completed successfully for the latest repository commit.
+GitHub Actions run `34030486163` completed successfully for the latest repository code commit.
 
 Certified jobs:
 
@@ -92,7 +92,9 @@ For the destructive drill, secure temporary copies of the raw and metadata archi
 temporary Qdrant instance and uniquely prefixed collections. The empty raw collection and one-point metadata
 collection both restored successfully; both temporary collections were deleted and the production Qdrant was never
 used as the drill target. Codex per-turn/SessionEnd capture and Hermes SessionDB finalize capture each traversed
-local fsync spool -> authenticated MCP -> Qdrant and were then cleaned up by exact point id.
+local fsync spool -> authenticated MCP -> Qdrant and were then cleaned up by exact point id. The root-client spool
+service is active; its spool directories are owner-only (`0700`) and its pending, sent, failed, and transcript-job
+files are owner-only (`0600`), including receipts tightened during service startup.
 
 The New API route was then exercised on the private server with its active token: the channel labelled
 `TYC-Memory-Embedding` accepts the request model `qwen3-embedding:0.6b` and returned a 1024-dimensional vector.
@@ -193,6 +195,8 @@ papered over:
 - external raw Qdrant snapshots had no repository-level client-node verifier; the read-only `deployment-seal` gate now
   checks their pointer, sidecars, tar structure, schedule-time evidence and permission policy, with an isolated restore
   drill that cannot target an arbitrary collection name.
+- local spool receipts and transcript references were created with the host umask; the spool now enforces owner-only
+  directories/files at initialization and on every atomic write/move, with a regression test.
 
 ## Deliberate scope boundary
 
