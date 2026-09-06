@@ -26,7 +26,7 @@ Certification date: 2026-09-06.
 
 ## Verdict
 
-**Repository seal: PASS. Operator deployment: NOT_SEALED under the strict deployment gate.**
+**Repository seal: PASS. Operator deployment: SEALED under the strict deployment gate.**
 
 The executable baseline passed both the ordinary CI matrix and the destructive/contract `seal` workflow. The final
 branch commit adds the report/configuration documentation and passed the same workflows again before the repository
@@ -114,12 +114,12 @@ permission `0700`, with its prior configuration preserved before the change.
 
 The core archive-node gate was rerun at 2026-09-06 22:41 Asia/Shanghai and returned `deployment_sealed=true`:
 the retained `sherman_memory` snapshot has natural 03:15 evidence, valid hashes/structure, secure permissions and
-freshness. The two additive `memorybridge_raw` and `memorybridge_meta` archive-family checks also pass integrity,
-structure and permissions, but remain `NOT_SEALED` only for schedule evidence because their latest artifacts are
-from the deliberate 18:58 immediate run. The server timer reports its next natural run at 2026-09-07 03:20
-Asia/Shanghai. Therefore the overall operator deployment remains `NOT_SEALED` under the all-families strict policy
-until that scheduled run is verified; the permission gate is already satisfied. Do not change the verifier to ignore
-this schedule boundary. These are deployment-state boundaries, not repository blockers.
+freshness. The VPS `memorybridge-cloud-backup.timer` then naturally triggered on 2026-09-07 at 03:20:22; its
+service finished successfully at 03:20:26. The client/archive mount received raw at 03:20:22 and meta at 03:20:25,
+and both per-family strict checks returned `ok`, integrity, security, schedule and freshness all true. Combined with
+the live Qdrant/MCP probes and isolated recovery drill above, the operator deployment is now `SEALED` under the
+all-families policy. The verifier still warns that retained history cannot prove every future daily run; the next
+scheduled execution remains part of normal monitoring. Do not change the verifier to ignore this boundary.
 
 ### Server-side agent enrollment and residue cleanup (2026-09-06)
 
