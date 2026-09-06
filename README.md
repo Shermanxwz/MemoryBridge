@@ -100,6 +100,10 @@ You may also point `MEMORYBRIDGE_VECTOR_COLLECTIONS` at existing Qdrant vector c
 compatible with the configured embedding model. This lets MemoryBridge use a current snapshot/index without
 forcing a migration.
 
+Do not list an existing collection with a different dimension as a vector candidate. In the current deployment,
+the legacy `sherman_memory` vectors are 768-dimensional, so they remain a source/lexical collection while new
+MemoryBridge writes use the 1024-dimensional generation-scoped fallback index.
+
 ## Quick deployment
 
 ```bash

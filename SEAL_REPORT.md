@@ -93,6 +93,9 @@ The production MemoryBridge image was rebuilt with `MEMORYBRIDGE_EMBED_BASE_URL=
 provider model and dimension, and a real temporary raw point was sent through the public MCP endpoint. Its
 asynchronous fallback index was created, `memory_search` returned `mode=vector`, and the raw point plus disposable
 fallback collection were removed afterward. `TYC-Memory-Analysis` is intentionally not a MemoryBridge dependency.
+The pre-existing `sherman_memory` collection remains a source/lexical collection rather than a vector candidate,
+because its 768-dimensional vectors are not compatible with the current 1024-dimensional TYC embedding. New
+MemoryBridge-owned writes use the generation-scoped 1024-dimensional fallback collection.
 
 The client/archive device now has a separate read-only CloudDrive2 mount for `/115open/qdrant-memory-backup` with
 UID/GID 0 and permission `0700`; both `memorybridge_raw` and `memorybridge_meta` are readable there with secure
