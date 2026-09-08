@@ -8,16 +8,23 @@ This report is the additive repository seal for the ChatGPT Chat / ChatGPT Work 
 
 **Repository-controlled ChatGPT integration: PASS at executable baseline `94c2843d316429c9eba492a182e05eb7d8b80cf2`.**
 
+**Integrated to `main` through merge commit `59cc5b7715f3247acaa7cd4cb977cbf55f2d3ed8`.**
+
 **Real ChatGPT workspace deployment: NOT YET SEALED by repository CI.** The workspace-specific gates in `DEPLOYMENT_SEAL.md` require an eligible ChatGPT workspace/admin, a real approved custom app id, a real OAuth provider deployment, workspace publication/permissions, and live Chat + Work acceptance calls. Repository automation must not claim those proprietary-host actions occurred when they did not.
 
-The baseline above passed both ordinary project CI and the dedicated ChatGPT seal on the PR branch before this evidence-only report was added. This report itself is under the dedicated seal workflow path and therefore must pass the same repository gates before merge.
+The executable baseline passed both ordinary project CI and the dedicated ChatGPT seal on the PR branch. The evidence-only report commit also passed the same PR gates before integration. This final main-branch evidence commit is intentionally under the dedicated seal workflow path so `main` itself must pass the repository gates after integration.
 
 ## Reproducible GitHub Actions evidence
 
-For baseline `94c2843d316429c9eba492a182e05eb7d8b80cf2`:
+For executable baseline `94c2843d316429c9eba492a182e05eb7d8b80cf2`:
 
 - ordinary `ci` run `34225071585` — **SUCCESS**;
 - dedicated `chatgpt-seal` run `34225071616` — **SUCCESS**.
+
+For final PR evidence commit `8bd02307a4e26bb03c831dc188e0244866431b7f`:
+
+- ordinary `ci` run `34227597769` — **SUCCESS** on Python 3.11 / 3.12 / 3.13;
+- dedicated `chatgpt-seal` run `34227597746` — **SUCCESS** across the full protocol, Plugin and packaged-wire jobs.
 
 The dedicated seal covers:
 
@@ -73,6 +80,6 @@ A read-only product tier can prove the read path but cannot satisfy a full read/
 
 ## Freeze rule
 
-The ChatGPT v0.2.0 feature expansion is an explicit unfreeze and reseal of the product surface. After merge and successful `main` gates, this surface is frozen to maintenance work: upstream compatibility, integrity/recovery, security, and tests/docs needed to prove those fixes.
+The ChatGPT v0.2.0 feature expansion is an explicit unfreeze and reseal of the product surface. After successful `main` gates, this surface is frozen to maintenance work: upstream compatibility, integrity/recovery, security, and tests/docs needed to prove those fixes.
 
 Any future claim of passive ChatGPT capture, row-level multi-tenancy, active-active exactly-once writes, additional destructive tools, or materially broader automatic persistence is a new product capability and requires an explicit unfreeze plus new seal evidence.
