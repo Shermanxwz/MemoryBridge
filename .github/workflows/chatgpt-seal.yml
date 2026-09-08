@@ -100,10 +100,20 @@ jobs:
       - name: Build deployable fixture package
         run: |
           python scripts/build_chatgpt_plugin.py \
-            --app-id app_ci_fixture_memorybridge_123 \
+            --app-id asdk_app_ci_fixture_memorybridge_123 \
             --marketplace-root /tmp/memorybridge-marketplace
           test -f /tmp/memorybridge-marketplace/.agents/plugins/marketplace.json
           test -f /tmp/memorybridge-marketplace/plugins/memorybridge/.codex-plugin/plugin.json
           test -f /tmp/memorybridge-marketplace/plugins/memorybridge/.app.json
           test -f /tmp/memorybridge-marketplace/plugins/memorybridge/skills/memorybridge/SKILL.md
           test ! -e /tmp/memorybridge-marketplace/plugins/memorybridge/.mcp.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("/tmp/memorybridge-marketplace")
+          binding = json.loads((root / "plugins/memorybridge/.app.json").read_text())
+          app = binding["apps"]["memorybridge"]
+          assert app == {"id": "asdk_app_ci_fixture_memorybridge_123", "required": True}
+          print("official existing-app binding schema: PASS")
+          PY
