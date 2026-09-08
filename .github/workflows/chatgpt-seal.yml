@@ -54,7 +54,7 @@ jobs:
         run: python tests/contracts/chatgpt.py
 
   packaged-server:
-    name: Packaged remote MCP startup
+    name: Packaged remote MCP startup and wire contract
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -88,6 +88,52 @@ jobs:
           else:
               raise SystemExit("packaged MCP server did not listen")
           PY
+          docker exec -i "$cid" python - <<'PY'
+          import asyncio
+
+          import httpx2
+          from mcp import Client
+          from mcp.client.streamable_http import streamable_http_client
+
+          EXPECTED = {
+              "memory_put",
+              "memory_scan",
+              "memory_since",
+              "memory_get",
+              "memory_recent",
+              "memory_ack",
+              "memory_status",
+              "memory_search",
+          }
+          READ_ONLY = EXPECTED - {"memory_put", "memory_ack"}
+
+          async def main():
+              async with httpx2.AsyncClient(
+                  headers={"Authorization": "Bearer seal-static-compat-token"},
+                  timeout=httpx2.Timeout(30.0, read=60.0),
+              ) as http_client:
+                  transport = streamable_http_client(
+                      "http://127.0.0.1:18766/mcp",
+                      http_client=http_client,
+                  )
+                  async with Client(transport) as client:
+                      result = await client.list_tools()
+                      tools = {tool.name: tool for tool in result.tools}
+                      assert set(tools) == EXPECTED
+                      for name, tool in tools.items():
+                          assert tool.description
+                          assert tool.annotations is not None
+                          assert tool.annotations.open_world_hint is False
+                          if name in READ_ONLY:
+                              assert tool.annotations.read_only_hint is True
+                              assert tool.annotations.idempotent_hint is True
+                          else:
+                              assert tool.annotations.read_only_hint is False
+                              assert tool.annotations.destructive_hint is False
+                      print("packaged authenticated MCP tools/list wire contract: PASS")
+
+          asyncio.run(main())
+          PY
 
   plugin-package:
     name: ChatGPT Work Plugin package
@@ -115,5 +161,9 @@ jobs:
           binding = json.loads((root / "plugins/memorybridge/.app.json").read_text())
           app = binding["apps"]["memorybridge"]
           assert app == {"id": "asdk_app_ci_fixture_memorybridge_123", "required": True}
-          print("official existing-app binding schema: PASS")
+          manifest = json.loads((root / "plugins/memorybridge/.codex-plugin/plugin.json").read_text())
+          assert manifest["interface"]["capabilities"] == ["Read", "Write"]
+          marketplace = json.loads((root / ".agents/plugins/marketplace.json").read_text())
+          assert "policy" not in marketplace["plugins"][0]
+          print("official existing-app Plugin and marketplace schema: PASS")
           PY
