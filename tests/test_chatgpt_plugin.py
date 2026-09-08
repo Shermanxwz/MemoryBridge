@@ -3,7 +3,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).parents[1]
 BUILDER = REPO_ROOT / "scripts" / "build_chatgpt_plugin.py"
 
