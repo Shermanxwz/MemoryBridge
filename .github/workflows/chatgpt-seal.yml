@@ -1,0 +1,109 @@
+name: chatgpt-seal
+
+on:
+  push:
+    branches: [chatgpt-official-seal, main]
+    paths:
+      - "memorybridge/**"
+      - "integrations/chatgpt/**"
+      - "scripts/build_chatgpt_plugin.py"
+      - "tests/test_chatgpt_contract.py"
+      - "tests/test_chatgpt_plugin.py"
+      - "tests/contracts/chatgpt.py"
+      - ".github/workflows/chatgpt-seal.yml"
+      - "pyproject.toml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "memorybridge/**"
+      - "integrations/chatgpt/**"
+      - "scripts/build_chatgpt_plugin.py"
+      - "tests/test_chatgpt_contract.py"
+      - "tests/test_chatgpt_plugin.py"
+      - "tests/contracts/chatgpt.py"
+      - ".github/workflows/chatgpt-seal.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  protocol-contract:
+    name: ChatGPT MCP contract (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: python -m pip install -U pip
+      - run: pip install -e '.[dev]'
+      - name: Compile
+        run: python -m compileall -q memorybridge integrations/chatgpt scripts tests
+      - name: Lint
+        run: ruff check memorybridge scripts tests
+      - name: Official host-facing tool and OAuth contracts
+        run: pytest -vv tests/test_chatgpt_contract.py tests/test_chatgpt_plugin.py
+      - name: Simulate ChatGPT Scan Tools
+        run: python tests/contracts/chatgpt.py
+
+  packaged-server:
+    name: Packaged remote MCP startup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build -t memorybridge-chatgpt-seal .
+      - name: Start packaged server with static compatibility auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          cid="$(docker run -d --network host \
+            -e MEMORYBRIDGE_HOST=127.0.0.1 \
+            -e MEMORYBRIDGE_PORT=18766 \
+            -e MEMORYBRIDGE_PUBLIC_MCP_URL=http://127.0.0.1:18766/mcp \
+            -e MEMORYBRIDGE_BEARER_TOKENS=seal-static-compat-token \
+            memorybridge-chatgpt-seal)"
+          cleanup() { docker logs "$cid" || true; docker rm -f "$cid" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          test "$(docker exec "$cid" id -u)" = "10001"
+          python - <<'PY'
+          import socket
+          import time
+
+          deadline = time.time() + 30
+          while time.time() < deadline:
+              try:
+                  with socket.create_connection(("127.0.0.1", 18766), timeout=1):
+                      print("packaged remote MCP startup: PASS")
+                      break
+              except OSError:
+                  time.sleep(0.25)
+          else:
+              raise SystemExit("packaged MCP server did not listen")
+          PY
+
+  plugin-package:
+    name: ChatGPT Work Plugin package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build deployable fixture package
+        run: |
+          python scripts/build_chatgpt_plugin.py \
+            --app-id app_ci_fixture_memorybridge_123 \
+            --marketplace-root /tmp/memorybridge-marketplace
+          test -f /tmp/memorybridge-marketplace/.agents/plugins/marketplace.json
+          test -f /tmp/memorybridge-marketplace/plugins/memorybridge/.codex-plugin/plugin.json
+          test -f /tmp/memorybridge-marketplace/plugins/memorybridge/.app.json
+          test -f /tmp/memorybridge-marketplace/plugins/memorybridge/skills/memorybridge/SKILL.md
+          test ! -e /tmp/memorybridge-marketplace/plugins/memorybridge/.mcp.json
