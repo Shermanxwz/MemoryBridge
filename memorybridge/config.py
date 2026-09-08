@@ -60,6 +60,13 @@ class Settings:
     public_mcp_url: str = os.getenv("MEMORYBRIDGE_PUBLIC_MCP_URL", "http://127.0.0.1:8765/mcp")
     bearer_tokens: tuple[str, ...] = _csv("MEMORYBRIDGE_BEARER_TOKENS")
     auth_issuer: str = os.getenv("MEMORYBRIDGE_AUTH_ISSUER", "https://memorybridge.invalid")
+    auth_required_scopes: tuple[str, ...] = _csv("MEMORYBRIDGE_AUTH_REQUIRED_SCOPES") or ("memory",)
+    oauth_introspection_url: str = os.getenv("MEMORYBRIDGE_OAUTH_INTROSPECTION_URL", "").strip()
+    oauth_introspection_client_id: str = os.getenv("MEMORYBRIDGE_OAUTH_INTROSPECTION_CLIENT_ID", "").strip()
+    oauth_introspection_client_secret: str = os.getenv(
+        "MEMORYBRIDGE_OAUTH_INTROSPECTION_CLIENT_SECRET", ""
+    ).strip()
+    oauth_introspection_timeout: int = _int("MEMORYBRIDGE_OAUTH_INTROSPECTION_TIMEOUT", 10)
 
     embed_base_url: str = os.getenv("MEMORYBRIDGE_EMBED_BASE_URL", "").rstrip("/")
     embed_api_key: str = os.getenv("MEMORYBRIDGE_EMBED_API_KEY", "")
