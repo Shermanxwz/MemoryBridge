@@ -3,7 +3,7 @@ import asyncio
 import httpx
 import pytest
 
-from memorybridge.auth import IntrospectionTokenVerifier, StaticTokenVerifier, build_token_verifier
+from memorybridge import auth
 from memorybridge.config import Settings
 from memorybridge.server import build_server
 
@@ -71,7 +71,7 @@ async def test_oauth_introspection_verifier_accepts_active_scoped_token_and_chec
         )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    verifier = IntrospectionTokenVerifier(
+    verifier = auth.IntrospectionTokenVerifier(
         "https://auth.example.com/introspect",
         client_id="memorybridge",
         client_secret="secret",
@@ -103,7 +103,7 @@ async def test_oauth_introspection_verifier_rejects_wrong_audience():
         )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    verifier = IntrospectionTokenVerifier(
+    verifier = auth.IntrospectionTokenVerifier(
         "https://auth.example.com/introspect",
         resource_server_url="https://memory.example.com/mcp",
         client=client,
@@ -120,11 +120,11 @@ def test_auth_modes_are_mutually_exclusive():
         oauth_introspection_url="https://auth.example.com/introspect",
     )
     with pytest.raises(ValueError, match="either MEMORYBRIDGE_BEARER_TOKENS"):
-        build_token_verifier(settings)
+        auth.build_token_verifier(settings)
 
 
 def test_static_token_verifier_preserves_existing_agent_auth_contract():
-    verifier = StaticTokenVerifier(("alpha", "beta"), ("memory",))
+    verifier = auth.StaticTokenVerifier(("alpha", "beta"), ("memory",))
     accepted = asyncio.run(verifier.verify_token("beta"))
     rejected = asyncio.run(verifier.verify_token("gamma"))
     assert accepted is not None
@@ -138,7 +138,7 @@ async def test_oauth_introspection_requires_resource_binding():
         return httpx.Response(200, json={"active": True, "scope": "memory"})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    verifier = IntrospectionTokenVerifier(
+    verifier = auth.IntrospectionTokenVerifier(
         "https://auth.example.com/introspect",
         resource_server_url="https://memory.example.com/mcp",
         client=client,
