@@ -3,21 +3,33 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
-from scripts.build_chatgpt_plugin import build_marketplace, build_plugin, validate_app_id
-
 
 REPO_ROOT = Path(__file__).parents[1]
+BUILDER = REPO_ROOT / "scripts" / "build_chatgpt_plugin.py"
 
 
-def test_plugin_builder_rejects_placeholders():
-    with pytest.raises(ValueError):
-        validate_app_id("YOUR_REAL_CHATGPT_APP_ID")
+def run_builder(app_id: str, target: Path, *, marketplace: bool = False) -> subprocess.CompletedProcess[str]:
+    destination_flag = "--marketplace-root" if marketplace else "--output"
+    return subprocess.run(
+        [sys.executable, str(BUILDER), "--app-id", app_id, destination_flag, str(target)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_plugin_builder_rejects_placeholders(tmp_path: Path):
+    result = run_builder("YOUR_REAL_CHATGPT_APP_ID", tmp_path / "rejected")
+    assert result.returncode != 0
+    assert "placeholder app id" in result.stderr
 
 
 def test_plugin_builder_emits_web_compatible_app_binding(tmp_path: Path):
-    plugin = build_plugin("app_memorybridge_test_123", tmp_path / "plugin", REPO_ROOT)
+    plugin = tmp_path / "plugin"
+    result = run_builder("app_memorybridge_test_123", plugin)
+    assert result.returncode == 0, result.stderr
+
     manifest = json.loads((plugin / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
     binding = json.loads((plugin / ".app.json").read_text(encoding="utf-8"))
 
@@ -32,7 +44,10 @@ def test_plugin_builder_emits_web_compatible_app_binding(tmp_path: Path):
 
 
 def test_plugin_builder_emits_github_importable_marketplace(tmp_path: Path):
-    root = build_marketplace("app_memorybridge_test_123", tmp_path / "marketplace", REPO_ROOT)
+    root = tmp_path / "marketplace"
+    result = run_builder("app_memorybridge_test_123", root, marketplace=True)
+    assert result.returncode == 0, result.stderr
+
     marketplace = json.loads(
         (root / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8")
     )
@@ -43,22 +58,9 @@ def test_plugin_builder_emits_github_importable_marketplace(tmp_path: Path):
     assert (root / "plugins" / "memorybridge" / ".app.json").is_file()
 
 
-def test_plugin_builder_cli(tmp_path: Path):
+def test_plugin_builder_cli_reports_target(tmp_path: Path):
     target = tmp_path / "cli-plugin"
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(REPO_ROOT / "scripts" / "build_chatgpt_plugin.py"),
-            "--app-id",
-            "app_memorybridge_cli_123",
-            "--output",
-            str(target),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = run_builder("app_memorybridge_cli_123", target)
     assert result.returncode == 0, result.stderr
     assert target.as_posix() in result.stdout
     assert (target / ".codex-plugin" / "plugin.json").is_file()
