@@ -37,6 +37,7 @@ class IntrospectionTokenVerifier(TokenVerifier):
         client_secret: str = "",
         resource_server_url: str = "",
         expected_issuer: str = "",
+        allowed_subjects: tuple[str, ...] = (),
         timeout: float = 10.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
@@ -47,6 +48,7 @@ class IntrospectionTokenVerifier(TokenVerifier):
         # OAuth/OIDC issuer identifiers use exact string comparison. Do not
         # canonicalize a trailing slash or otherwise make issuer checks lenient.
         self.expected_issuer = expected_issuer
+        self.allowed_subjects = frozenset(allowed_subjects)
         self._client = client or httpx.AsyncClient(timeout=timeout)
         self._owns_client = client is None
 
@@ -111,6 +113,11 @@ class IntrospectionTokenVerifier(TokenVerifier):
         if resource == "":
             return None
 
+        subject = payload.get("sub")
+        if self.allowed_subjects:
+            if subject is None or str(subject) not in self.allowed_subjects:
+                return None
+
         expires_at: int | None = None
         raw_exp = payload.get("exp")
         if isinstance(raw_exp, int | float):
@@ -119,7 +126,6 @@ class IntrospectionTokenVerifier(TokenVerifier):
         client_id = str(
             payload.get("client_id") or payload.get("azp") or payload.get("sub") or "oauth-client"
         )
-        subject = payload.get("sub")
         claims = {key: payload[key] for key in ("iss", "aud", "username") if key in payload}
         return AccessToken(
             token=token,
@@ -152,6 +158,7 @@ def build_token_verifier(settings):
             client_secret=settings.oauth_introspection_client_secret,
             resource_server_url=settings.public_mcp_url,
             expected_issuer=settings.auth_issuer,
+            allowed_subjects=settings.oauth_allowed_subjects,
             timeout=float(settings.oauth_introspection_timeout),
         )
     if settings.bearer_tokens:
