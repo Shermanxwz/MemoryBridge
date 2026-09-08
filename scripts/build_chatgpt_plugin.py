@@ -9,16 +9,29 @@ from pathlib import Path
 PLUGIN_NAME = "memorybridge"
 PLUGIN_VERSION = "0.2.0"
 APP_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.~:-]{3,256}$")
+SUPPORTED_APP_ID_PREFIXES = ("asdk_app_", "connector_", "templated_apps_")
 PLACEHOLDER_MARKERS = ("YOUR_", "REPLACE_", "PLACEHOLDER")
 
 
 def validate_app_id(app_id: str) -> str:
+    """Validate and normalize a ChatGPT app reference for `.app.json`.
+
+    ChatGPT admin/plugin URLs can expose a technical id prefixed with `plugin_`,
+    while `.app.json` requires the underlying app id. Accept that copied form for
+    operator convenience, but only emit one of the app-id families documented by
+    OpenAI for existing-app references.
+    """
     value = app_id.strip()
+    if value.startswith("plugin_"):
+        value = value.removeprefix("plugin_")
     if not APP_ID_PATTERN.fullmatch(value):
         raise ValueError("app id contains unsupported characters or has an invalid length")
     upper = value.upper()
     if any(marker in upper for marker in PLACEHOLDER_MARKERS):
         raise ValueError("refusing to build a deployable Plugin with a placeholder app id")
+    if not value.startswith(SUPPORTED_APP_ID_PREFIXES):
+        supported = ", ".join(SUPPORTED_APP_ID_PREFIXES)
+        raise ValueError(f"unsupported ChatGPT app id prefix; expected one of: {supported}")
     return value
 
 
@@ -70,7 +83,7 @@ def build_plugin(app_id: str, output: Path, source_root: Path) -> Path:
     output.mkdir(parents=True, exist_ok=True)
 
     write_json(output / ".codex-plugin" / "plugin.json", plugin_manifest())
-    write_json(output / ".app.json", {"apps": {PLUGIN_NAME: {"id": value}}})
+    write_json(output / ".app.json", {"apps": {PLUGIN_NAME: {"id": value, "required": True}}})
 
     source_skill = source_root / "integrations" / "chatgpt" / "skill" / "memorybridge"
     if not (source_skill / "SKILL.md").is_file():
@@ -105,7 +118,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Build a ChatGPT/Codex Plugin package bound to an existing approved MemoryBridge app."
     )
-    parser.add_argument("--app-id", required=True, help="Real ChatGPT workspace app/connector id")
+    parser.add_argument(
+        "--app-id",
+        required=True,
+        help=(
+            "Real ChatGPT app id (asdk_app_..., connector_..., templated_apps_...) or copied "
+            "plugin_asdk_app_... technical id"
+        ),
+    )
     destinations = parser.add_mutually_exclusive_group(required=True)
     destinations.add_argument("--output", type=Path, help="Plugin package output directory")
     destinations.add_argument(
