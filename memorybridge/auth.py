@@ -101,8 +101,9 @@ class IntrospectionTokenVerifier(TokenVerifier):
             return None
 
         issuer = payload.get("iss")
-        if self.expected_issuer and issuer is not None and str(issuer).rstrip("/") != self.expected_issuer:
-            return None
+        if self.expected_issuer:
+            if issuer is None or str(issuer).rstrip("/") != self.expected_issuer:
+                return None
 
         resource = self._resource_from_payload(payload)
         if resource == "":
