@@ -59,7 +59,7 @@ def plugin_manifest() -> dict:
             ),
             "developerName": "MemoryBridge contributors",
             "category": "Productivity",
-            "capabilities": ["Interactive", "Read", "Write"],
+            "capabilities": ["Read", "Write"],
             "websiteURL": "https://github.com/Shermanxwz/MemoryBridge",
             "privacyPolicyURL": "https://github.com/Shermanxwz/MemoryBridge/blob/main/PRIVACY.md",
             "termsOfServiceURL": "https://github.com/Shermanxwz/MemoryBridge/blob/main/TERMS.md",
@@ -105,7 +105,6 @@ def build_marketplace(app_id: str, root: Path, source_root: Path) -> Path:
             {
                 "name": PLUGIN_NAME,
                 "source": {"source": "local", "path": f"./plugins/{PLUGIN_NAME}"},
-                "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
                 "category": "Productivity",
             }
         ],
