@@ -42,6 +42,7 @@ def test_plugin_builder_emits_web_compatible_app_binding(tmp_path: Path):
     assert manifest["version"] == "0.2.0"
     assert manifest["apps"] == "./.app.json"
     assert manifest["skills"] == "./skills/"
+    assert manifest["interface"]["capabilities"] == ["Read", "Write"]
     assert "mcpServers" not in manifest
     assert not (plugin / ".mcp.json").exists()
     assert binding == {
@@ -74,7 +75,7 @@ def test_plugin_builder_emits_github_importable_marketplace(tmp_path: Path):
     entry = marketplace["plugins"][0]
     assert entry["name"] == "memorybridge"
     assert entry["source"] == {"source": "local", "path": "./plugins/memorybridge"}
-    assert entry["policy"] == {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}
+    assert "policy" not in entry
     assert (root / "plugins" / "memorybridge" / ".app.json").is_file()
 
 
