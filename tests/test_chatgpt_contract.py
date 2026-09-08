@@ -76,6 +76,7 @@ async def test_oauth_introspection_verifier_accepts_active_scoped_token_and_chec
         client_secret="secret",
         resource_server_url="https://memory.example.com/mcp",
         expected_issuer="https://auth.example.com",
+        allowed_subjects=("user-123",),
         client=client,
     )
     try:
@@ -160,6 +161,61 @@ async def test_oauth_introspection_issuer_comparison_is_exact():
     )
     try:
         assert await verifier.verify_token("issuer-slash-mismatch") is None
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_oauth_subject_allowlist_rejects_untrusted_principal():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "active": True,
+                "sub": "other-user",
+                "scope": "memory",
+                "iss": "https://auth.example.com",
+                "aud": "https://memory.example.com/mcp",
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    verifier = auth.IntrospectionTokenVerifier(
+        "https://auth.example.com/introspect",
+        resource_server_url="https://memory.example.com/mcp",
+        expected_issuer="https://auth.example.com",
+        allowed_subjects=("owner-user",),
+        client=client,
+    )
+    try:
+        assert await verifier.verify_token("untrusted-subject") is None
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_oauth_subject_allowlist_rejects_missing_subject():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "active": True,
+                "scope": "memory",
+                "iss": "https://auth.example.com",
+                "aud": "https://memory.example.com/mcp",
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    verifier = auth.IntrospectionTokenVerifier(
+        "https://auth.example.com/introspect",
+        resource_server_url="https://memory.example.com/mcp",
+        expected_issuer="https://auth.example.com",
+        allowed_subjects=("owner-user",),
+        client=client,
+    )
+    try:
+        assert await verifier.verify_token("missing-subject") is None
     finally:
         await client.aclose()
 
