@@ -9,7 +9,8 @@
 5. **Graceful retrieval degradation.** Agent native -> Qwen/Qdrant vector -> no-model lexical -> raw/recent.
 6. **Indexes are disposable.** Fallback collections are generation-scoped by embedding model + dimension and may be rebuilt without altering raw memories.
 7. **Snapshots are recoverable, exports are portable.** MemoryBridge-owned archives contain a Qdrant snapshot plus JSONL.GZ and SHA-256 manifest. External raw-snapshot archives are verified through their own `latest.json` and sidecars.
-8. **No user-facing control plane.** No dashboard, policy evolution, ranking governance, Kafka, Redis or graph database.
+8. **One sealed durable writer process.** The packaged production topology uses one MemoryBridge MCP service process for a write collection. It serializes the first-writer idempotency check + sequence allocation + raw upsert. Active-active multi-process/multi-replica writers require an external distributed compare-and-set/serialization mechanism and are outside this seal.
+9. **No user-facing control plane.** No dashboard, policy evolution, ranking governance, Kafka, Redis or graph database.
 
 ## Data flow
 
@@ -42,7 +43,9 @@
 
 The ChatGPT path is deliberately different from the capture-enabled clients. ChatGPT invokes MemoryBridge as an official remote MCP app when the host chooses/permits a tool call. MemoryBridge does not claim a `UserPromptSubmit`, `Stop`, `SessionEnd`, or equivalent ChatGPT lifecycle event that OpenAI has not exposed to custom MCP apps.
 
-For production ChatGPT OAuth, MemoryBridge is the OAuth resource server. A separate authorization server performs user authorization and token issuance; MemoryBridge publishes the MCP protected-resource metadata through the MCP SDK and verifies bearer tokens either with its existing static-token mode or, for OAuth deployments, through RFC 7662 token introspection. The two verifier modes are mutually exclusive.
+For production ChatGPT OAuth, MemoryBridge is the OAuth resource server. A separate authorization server performs user authorization and token issuance; MemoryBridge publishes the MCP protected-resource metadata through the MCP SDK and verifies bearer tokens either with its existing static-token mode or, for OAuth deployments, through RFC 7662 token introspection. The two verifier modes are mutually exclusive. A configured OAuth issuer is compared exactly and the access token must be bound to the MCP resource/audience before the SDK enforces expiry and required scope.
+
+The service-level `memory_put` critical section makes deterministic idempotency first-writer-wins within the sealed single-process topology. The sequence clock remains durable in Qdrant metadata. Running multiple independent MemoryBridge writers against one raw collection is intentionally not presented as sealed because an in-process lock cannot provide cross-process compare-and-set semantics.
 
 The device that runs Codex/Hermes may also be an archive-verification node. It reads a server-created CloudDrive2 archive and can restore into a dedicated temporary Qdrant, but it does not assume that a local `127.0.0.1:6333` endpoint is the production database.
 
