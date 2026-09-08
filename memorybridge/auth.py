@@ -44,7 +44,9 @@ class IntrospectionTokenVerifier(TokenVerifier):
         self.client_id = client_id
         self.client_secret = client_secret
         self.resource_server_url = resource_server_url.rstrip("/")
-        self.expected_issuer = expected_issuer.rstrip("/")
+        # OAuth/OIDC issuer identifiers use exact string comparison. Do not
+        # canonicalize a trailing slash or otherwise make issuer checks lenient.
+        self.expected_issuer = expected_issuer
         self._client = client or httpx.AsyncClient(timeout=timeout)
         self._owns_client = client is None
 
@@ -102,7 +104,7 @@ class IntrospectionTokenVerifier(TokenVerifier):
 
         issuer = payload.get("iss")
         if self.expected_issuer:
-            if issuer is None or str(issuer).rstrip("/") != self.expected_issuer:
+            if issuer is None or str(issuer) != self.expected_issuer:
                 return None
 
         resource = self._resource_from_payload(payload)
@@ -142,6 +144,8 @@ def build_token_verifier(settings):
             "MEMORYBRIDGE_OAUTH_INTROSPECTION_URL, not both"
         )
     if settings.oauth_introspection_url:
+        if settings.auth_issuer == "https://memorybridge.invalid":
+            raise ValueError("set MEMORYBRIDGE_AUTH_ISSUER when OAuth introspection is enabled")
         return IntrospectionTokenVerifier(
             settings.oauth_introspection_url,
             client_id=settings.oauth_introspection_client_id,
