@@ -29,7 +29,7 @@ The repository owns and tests the following host-facing contract:
 - a reproducible Plugin package generator and MemoryBridge skill;
 - an official `.app.json` existing-app reference with `required: true`;
 - validation/normalization of the app-id families OpenAI documents for `.app.json`;
-- CI contracts that exercise all of the above on supported Python versions.
+- CI contracts that exercise all of the above on supported Python versions and over the packaged authenticated MCP wire.
 
 What CI cannot honestly seal is OpenAI's proprietary ChatGPT web host, workspace approval, an administrator's OAuth provider configuration, or the workspace-specific app id generated when an admin creates the custom app. Those are deployment gates and are covered by `DEPLOYMENT_SEAL.md`.
 
@@ -122,7 +122,7 @@ python scripts/build_chatgpt_plugin.py \
 
 The generated Plugin references the **existing approved ChatGPT app** through `.app.json`, marks it required, and deliberately contains no `.mcp.json`. Current OpenAI guidance states that imported plugins declaring MCP servers directly can be marked Desktop only; referencing the already-approved app preserves the normal ChatGPT app permission/authentication path.
 
-The marketplace generator includes repository policy hints for local authoring compatibility, but GitHub marketplace import does **not** apply repository installation/authentication policies to the workspace. Configure Available/Installed, authentication, required-app access and action controls in ChatGPT workspace settings after import.
+The marketplace generator intentionally does **not** emit installation/authentication policy fields. OpenAI's GitHub marketplace import ignores repository policy values; workspace administrators must configure Available/Installed, authentication, required-app access and action controls in ChatGPT workspace settings after import.
 
 The bundled source skill is `integrations/chatgpt/skill/memorybridge/SKILL.md`; the generated package places it at `skills/memorybridge/SKILL.md`. It tells ChatGPT to retrieve durable context when relevant and to write only durable decisions/preferences/outcomes, never to behave as a passive transcript recorder.
 
