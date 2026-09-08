@@ -67,6 +67,7 @@ class Settings:
         "MEMORYBRIDGE_OAUTH_INTROSPECTION_CLIENT_SECRET", ""
     ).strip()
     oauth_introspection_timeout: int = _int("MEMORYBRIDGE_OAUTH_INTROSPECTION_TIMEOUT", 10)
+    oauth_allowed_subjects: tuple[str, ...] = _csv("MEMORYBRIDGE_OAUTH_ALLOWED_SUBJECTS")
 
     embed_base_url: str = os.getenv("MEMORYBRIDGE_EMBED_BASE_URL", "").rstrip("/")
     embed_api_key: str = os.getenv("MEMORYBRIDGE_EMBED_API_KEY", "")
