@@ -138,12 +138,44 @@ async def test_oauth_introspection_verifier_rejects_missing_configured_issuer():
         await client.aclose()
 
 
+@pytest.mark.asyncio
+async def test_oauth_introspection_issuer_comparison_is_exact():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "active": True,
+                "scope": "memory",
+                "iss": "https://auth.example.com/",
+                "aud": "https://memory.example.com/mcp",
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    verifier = auth.IntrospectionTokenVerifier(
+        "https://auth.example.com/introspect",
+        resource_server_url="https://memory.example.com/mcp",
+        expected_issuer="https://auth.example.com",
+        client=client,
+    )
+    try:
+        assert await verifier.verify_token("issuer-slash-mismatch") is None
+    finally:
+        await client.aclose()
+
+
 def test_auth_modes_are_mutually_exclusive():
     settings = Settings(
         bearer_tokens=("static-token",),
         oauth_introspection_url="https://auth.example.com/introspect",
     )
     with pytest.raises(ValueError, match="either MEMORYBRIDGE_BEARER_TOKENS"):
+        auth.build_token_verifier(settings)
+
+
+def test_oauth_mode_requires_non_placeholder_issuer():
+    settings = Settings(oauth_introspection_url="https://auth.example.com/introspect")
+    with pytest.raises(ValueError, match="MEMORYBRIDGE_AUTH_ISSUER"):
         auth.build_token_verifier(settings)
 
 
