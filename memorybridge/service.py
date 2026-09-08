@@ -30,6 +30,7 @@ class MemoryService:
             if settings.embedding_enabled
             else None
         )
+        self._put_lock = asyncio.Lock()
         self._seq_lock = asyncio.Lock()
         self._last_seq: int | None = None
 
@@ -64,16 +65,31 @@ class MemoryService:
     async def put(self, put: MemoryPut) -> dict[str, Any]:
         await self.ensure()
         memory_id = put.deterministic_id()
-        existing = await self.qdrant.get_point(self.settings.write_collection, memory_id)
-        if existing:
-            payload = existing.get("payload") or {}
-            return {"id": memory_id, "seq": payload.get("seq"), "stored": True, "duplicate": True,
-                    "index_status": payload.get("index_status", "unknown")}
-        seq = await self._next_seq()
-        record = MemoryRecord.from_put(put, memory_id=memory_id, seq=seq)
-        await self.qdrant.upsert_payload_point(self.settings.write_collection, memory_id, record.payload())
-        return {"id": memory_id, "seq": seq, "stored": True, "duplicate": False,
-                "index_status": record.index_status}
+        # MemoryBridge's packaged production topology is a single MCP service process.
+        # Serialize the first-writer-wins check and raw upsert so concurrent retries
+        # with the same idempotency key cannot both allocate a sequence and race an
+        # overwrite inside that process.
+        async with self._put_lock:
+            existing = await self.qdrant.get_point(self.settings.write_collection, memory_id)
+            if existing:
+                payload = existing.get("payload") or {}
+                return {
+                    "id": memory_id,
+                    "seq": payload.get("seq"),
+                    "stored": True,
+                    "duplicate": True,
+                    "index_status": payload.get("index_status", "unknown"),
+                }
+            seq = await self._next_seq()
+            record = MemoryRecord.from_put(put, memory_id=memory_id, seq=seq)
+            await self.qdrant.upsert_payload_point(self.settings.write_collection, memory_id, record.payload())
+            return {
+                "id": memory_id,
+                "seq": seq,
+                "stored": True,
+                "duplicate": False,
+                "index_status": record.index_status,
+            }
 
     @staticmethod
     def _extract_content(payload: dict[str, Any]) -> str:
