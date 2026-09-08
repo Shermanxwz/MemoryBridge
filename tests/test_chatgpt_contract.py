@@ -7,7 +7,6 @@ from memorybridge import auth
 from memorybridge.config import Settings
 from memorybridge.server import build_server
 
-
 EXPECTED_TOOLS = {
     "memory_put",
     "memory_scan",
