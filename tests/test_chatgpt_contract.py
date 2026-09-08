@@ -113,6 +113,31 @@ async def test_oauth_introspection_verifier_rejects_wrong_audience():
         await client.aclose()
 
 
+@pytest.mark.asyncio
+async def test_oauth_introspection_verifier_rejects_missing_configured_issuer():
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "active": True,
+                "scope": "memory",
+                "aud": "https://memory.example.com/mcp",
+            },
+        )
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    verifier = auth.IntrospectionTokenVerifier(
+        "https://auth.example.com/introspect",
+        resource_server_url="https://memory.example.com/mcp",
+        expected_issuer="https://auth.example.com",
+        client=client,
+    )
+    try:
+        assert await verifier.verify_token("missing-issuer") is None
+    finally:
+        await client.aclose()
+
+
 def test_auth_modes_are_mutually_exclusive():
     settings = Settings(
         bearer_tokens=("static-token",),
