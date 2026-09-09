@@ -38,7 +38,7 @@ Repository CI proves the server/tool/plugin contracts MemoryBridge controls. A r
 - [ ] On a Business or Enterprise/Edu workspace with full MCP enabled, `memory_put` writes a unique disposable marker after the expected confirmation/permission flow.
 - [ ] A follow-up app invocation retrieves the marker.
 - [ ] With the archive card enabled, sending `@MemoryBridge` alone renders the inline archive card in the conversation.
-- [ ] Clicking **MemoryBridge归档** sends a follow-up request, calls `memorybridge_archive_save`, and displays success only after `stored=true`.
+- [ ] The card displays a prepared summary; clicking **确认归档** calls `memorybridge_archive_save` directly, sends no follow-up chat message, and displays success only after `stored=true`.
 - [ ] The operator verified that the archive card is an inline app UI and does not modify ChatGPT's native archive/right-click menu.
 - [ ] The operator verified and documented that a selected app applies to the message where it is invoked; later requests that require fresh app data/actions invoke it again.
 - [ ] The operator verified that retrieved memory is treated as untrusted context rather than a higher-priority instruction channel.

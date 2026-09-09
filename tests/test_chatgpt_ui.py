@@ -23,20 +23,23 @@ def test_chatgpt_archive_ui_is_opt_in_and_does_not_expand_the_legacy_surface():
 
 def test_chatgpt_archive_widget_uses_the_mcp_apps_bridge_and_safe_button_text():
     assert ARCHIVE_RESOURCE_URI.startswith("ui://")
-    assert "MemoryBridge归档" in ARCHIVE_WIDGET_HTML
-    assert 'request("ui/message"' in ARCHIVE_WIDGET_HTML
+    assert "确认归档" in ARCHIVE_WIDGET_HTML
+    assert 'request("tools/call"' in ARCHIVE_WIDGET_HTML
     assert "memorybridge_archive_save" in ARCHIVE_WIDGET_HTML
     assert "bearer token" in ARCHIVE_WIDGET_HTML.lower()
+    assert "ui/message" not in ARCHIVE_WIDGET_HTML
+    assert "sendFollowUpMessage" not in ARCHIVE_WIDGET_HTML
 
 
 def test_chatgpt_archive_tools_link_to_the_ui_resource():
     server = build_server(Settings(chatgpt_ui_enabled=True))
     try:
         tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
-        for name in ("memorybridge_archive_panel", "memorybridge_archive_save"):
-            raw = tools[name].model_dump(by_alias=True)
-            assert raw["_meta"]["ui"]["resourceUri"] == ARCHIVE_RESOURCE_URI
-            assert raw["_meta"]["openai/outputTemplate"] == ARCHIVE_RESOURCE_URI
+        panel = tools["memorybridge_archive_panel"].model_dump(by_alias=True)
+        assert panel["_meta"]["ui"]["resourceUri"] == ARCHIVE_RESOURCE_URI
+        assert panel["_meta"]["openai/outputTemplate"] == ARCHIVE_RESOURCE_URI
+        save = tools["memorybridge_archive_save"].model_dump(by_alias=True)
+        assert save.get("_meta") is None
     finally:
         asyncio.run(server._memorybridge_service.close())
 
@@ -49,8 +52,21 @@ def test_chatgpt_archive_panel_is_ui_only_and_save_writes_chatgpt_metadata():
             return_value={"stored": True, "id": "archive-id", "seq": 7, "index_status": "pending"}
         )
 
-        panel = asyncio.run(server.call_tool("memorybridge_archive_panel", {}))
-        assert panel.structured_content["state"] == "ready"
+        panel = asyncio.run(
+            server.call_tool(
+                "memorybridge_archive_panel",
+                {
+                    "summary": "已确定使用 ChatGPT 应用内归档卡片。",
+                    "title": "MemoryBridge ChatGPT 归档",
+                    "decisions": ["只启用 ChatGPT 专用入口"],
+                    "next_steps": ["在 ChatGPT 中刷新工具并测试"],
+                    "project": "MemoryBridge",
+                    "idempotency_key": "archive-test-1",
+                },
+            )
+        )
+        assert panel.structured_content["state"] == "draft"
+        assert panel.structured_content["summary"] == "已确定使用 ChatGPT 应用内归档卡片。"
         service.put.assert_not_awaited()
 
         result = asyncio.run(
@@ -71,6 +87,19 @@ def test_chatgpt_archive_panel_is_ui_only_and_save_writes_chatgpt_metadata():
         assert put.source_device == "chatgpt-app"
         assert put.metadata["archive_trigger"] == "chatgpt_archive_card"
         assert "密码" not in put.content
+    finally:
+        asyncio.run(server._memorybridge_service.close())
+
+
+def test_chatgpt_archive_panel_without_a_draft_never_writes_or_requests_a_prompt():
+    server = build_server(Settings(chatgpt_ui_enabled=True))
+    try:
+        service = server._memorybridge_service
+        service.put = AsyncMock()
+        result = asyncio.run(server.call_tool("memorybridge_archive_panel", {}))
+        assert result.structured_content["state"] == "draft_required"
+        assert result.structured_content["stored"] is not True
+        service.put.assert_not_awaited()
     finally:
         asyncio.run(server._memorybridge_service.close())
 

@@ -109,7 +109,7 @@ In a new ChatGPT message, explicitly select the app with:
 @MemoryBridge
 ```
 
-The server instructions ask ChatGPT to call `memorybridge_archive_panel`, which renders an inline card in the conversation. The card contains the prominent **MemoryBridge归档** button. Clicking it sends a follow-up request to ChatGPT through the standard `ui/message` bridge. ChatGPT then produces a concise durable summary and calls `memorybridge_archive_save`; the server writes the summary to `memorybridge_raw` and returns `stored=true` before the card shows success.
+The server instructions ask ChatGPT to first prepare a concise safe summary and call `memorybridge_archive_panel` with that draft. The tool renders an inline review card in the conversation. The card displays the summary and contains a confirmation button. Clicking it calls `memorybridge_archive_save` directly through the MCP Apps `tools/call` bridge; it does not send a follow-up chat prompt or expose internal tool parameters. The server writes the summary to `memorybridge_raw` and returns `stored=true` before the card shows success.
 
 `@MemoryBridge` is an app selection, not a custom `/` slash command and not an input-text expansion. The model still decides to call the opener tool based on the explicit app invocation and server instructions. The card is rendered alongside the conversation, not in ChatGPT's native archive or right-click menu. If the approved app has a frozen tool snapshot, use **Scan/refresh tools** after enabling this extension.
 

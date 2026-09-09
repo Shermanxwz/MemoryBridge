@@ -91,8 +91,11 @@ MCP Apps UI tools without changing the legacy endpoint:
 
 When `MEMORYBRIDGE_CHATGPT_UI=true` is set only on the ChatGPT instance, it additionally exposes:
 
-- `memorybridge_archive_panel` — render the inline ChatGPT archive card without writing.
+- `memorybridge_archive_panel` — render a review card for a prepared summary without writing.
 - `memorybridge_archive_save` — append the user-requested concise ChatGPT summary to `memorybridge_raw`.
+
+The archive card previews the summary supplied by ChatGPT and calls the save tool directly after the user confirms.
+It does not send a follow-up chat prompt.
 
 Tool names, schemas and safety annotations are a compatibility surface. The ChatGPT seal workflow validates them
 both in-process and over the packaged server's authenticated Streamable HTTP wire path. The archive-card tools are

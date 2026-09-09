@@ -38,3 +38,11 @@ For ChatGPT-originated writes, use `source_agent="chatgpt"`. Set `project` when 
 ## Host boundary
 
 An installed app or plugin does not give MemoryBridge passive access to every ChatGPT turn. Invoke the app only through the host's approved tool path. Do not claim a conversation was captured unless a write actually succeeded or another documented capture-enabled adapter performed it.
+
+## ChatGPT archive card
+
+When the user explicitly asks to archive the current ChatGPT conversation, prepare a concise durable summary
+without credentials, then call `memorybridge_archive_panel` with that summary and any useful decisions or next
+steps. The panel only displays a review card. Its confirmation button directly calls
+`memorybridge_archive_save`; do not send a follow-up chat prompt or expose internal tool parameters. Report
+success only when the save result has `stored=true`.
