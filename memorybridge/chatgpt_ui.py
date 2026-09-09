@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-ARCHIVE_RESOURCE_URI = "ui://memorybridge/archive-v2.html"
-# Keep the old URI alive so a cached ChatGPT app gets the safe direct-call UI too.
+ARCHIVE_RESOURCE_URI = "ui://memorybridge/archive-v3.html"
+# Keep previous URIs alive so cached ChatGPT cards continue to load the fixed
+# direct-call UI while the refreshed tool snapshot uses the newest URI.
+ARCHIVE_PREVIOUS_RESOURCE_URI = "ui://memorybridge/archive-v2.html"
 ARCHIVE_LEGACY_RESOURCE_URI = "ui://memorybridge/archive.html"
 
 ARCHIVE_UI_META = {
@@ -16,6 +18,14 @@ ARCHIVE_UI_META = {
 }
 
 ARCHIVE_WIDGET_META = {"ui": {"prefersBorder": True}}
+
+# The save tool is intentionally callable from the review card after the
+# user's click. Keep the standard MCP Apps visibility and the ChatGPT
+# compatibility flag so both bridge variants can authorize that call.
+ARCHIVE_SAVE_UI_META = {
+    "ui": {"visibility": ["model", "app"]},
+    "openai/widgetAccessible": True,
+}
 
 ARCHIVE_WIDGET_HTML = r"""<!doctype html>
 <html lang="zh-CN">
@@ -260,10 +270,16 @@ ARCHIVE_WIDGET_HTML = r"""<!doctype html>
     }
 
     async function callTool(name, args) {
-      if (window.openai && typeof window.openai.callTool === "function") {
-        return window.openai.callTool(name, args);
+      // MCP Apps is the portable path and is the recommended ChatGPT path.
+      // Keep the ChatGPT alias as a fallback for older hosts.
+      try {
+        return await request("tools/call", {name: name, arguments: args});
+      } catch (bridgeError) {
+        if (window.openai && typeof window.openai.callTool === "function") {
+          return window.openai.callTool(name, args);
+        }
+        throw bridgeError;
       }
-      return request("tools/call", {name: name, arguments: args});
     }
 
     function resultFrom(value) {
@@ -306,7 +322,8 @@ ARCHIVE_WIDGET_HTML = r"""<!doctype html>
       } catch (error) {
         busy = false;
         button.disabled = false;
-        setStatus("未保存，请稍后重试。", "error");
+        const detail = error && error.message ? "：" + error.message : "，请稍后重试";
+        setStatus("未保存" + detail + "。", "error");
       }
     });
   </script>

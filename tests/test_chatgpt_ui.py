@@ -23,6 +23,7 @@ def test_chatgpt_archive_ui_is_opt_in_and_does_not_expand_the_legacy_surface():
 
 def test_chatgpt_archive_widget_uses_the_mcp_apps_bridge_and_safe_button_text():
     assert ARCHIVE_RESOURCE_URI.startswith("ui://")
+    assert ARCHIVE_RESOURCE_URI.endswith("archive-v3.html")
     assert "确认归档" in ARCHIVE_WIDGET_HTML
     assert 'request("tools/call"' in ARCHIVE_WIDGET_HTML
     assert "memorybridge_archive_save" in ARCHIVE_WIDGET_HTML
@@ -39,7 +40,8 @@ def test_chatgpt_archive_tools_link_to_the_ui_resource():
         assert panel["_meta"]["ui"]["resourceUri"] == ARCHIVE_RESOURCE_URI
         assert panel["_meta"]["openai/outputTemplate"] == ARCHIVE_RESOURCE_URI
         save = tools["memorybridge_archive_save"].model_dump(by_alias=True)
-        assert save.get("_meta") is None
+        assert save["_meta"]["ui"]["visibility"] == ["model", "app"]
+        assert save["_meta"]["openai/widgetAccessible"] is True
     finally:
         asyncio.run(server._memorybridge_service.close())
 
