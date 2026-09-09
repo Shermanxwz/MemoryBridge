@@ -16,6 +16,7 @@ from .auth import IntrospectionTokenVerifier, build_token_verifier
 from .chatgpt_ui import (
     ARCHIVE_LEGACY_RESOURCE_URI,
     ARCHIVE_PREVIOUS_RESOURCE_URI,
+    ARCHIVE_PRIOR_RESOURCE_URI,
     ARCHIVE_RESOURCE_URI,
     ARCHIVE_SAVE_UI_META,
     ARCHIVE_UI_META,
@@ -136,6 +137,17 @@ def build_server(settings: Settings | None = None) -> MCPServer:
         )
         def memorybridge_archive_widget_previous() -> str:
             return ARCHIVE_WIDGET_HTML
+        @mcp.resource(
+            ARCHIVE_PRIOR_RESOURCE_URI,
+            name="MemoryBridge archive card (v3 URI)",
+            title="MemoryBridge 归档",
+            description="Compatibility URI for cached user-initiated durable conversation summary cards.",
+            mime_type="text/html;profile=mcp-app",
+            meta=ARCHIVE_WIDGET_META,
+        )
+        def memorybridge_archive_widget_prior() -> str:
+            return ARCHIVE_WIDGET_HTML
+
 
         @mcp.resource(
             ARCHIVE_LEGACY_RESOURCE_URI,

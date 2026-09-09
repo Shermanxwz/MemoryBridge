@@ -23,7 +23,7 @@ def test_chatgpt_archive_ui_is_opt_in_and_does_not_expand_the_legacy_surface():
 
 def test_chatgpt_archive_widget_uses_the_mcp_apps_bridge_and_safe_button_text():
     assert ARCHIVE_RESOURCE_URI.startswith("ui://")
-    assert ARCHIVE_RESOURCE_URI.endswith("archive-v3.html")
+    assert ARCHIVE_RESOURCE_URI.endswith("archive-v4.html")
     assert "确认归档" in ARCHIVE_WIDGET_HTML
     assert 'request("tools/call"' in ARCHIVE_WIDGET_HTML
     assert "memorybridge_archive_save" in ARCHIVE_WIDGET_HTML

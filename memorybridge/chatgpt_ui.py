@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-ARCHIVE_RESOURCE_URI = "ui://memorybridge/archive-v3.html"
+ARCHIVE_RESOURCE_URI = "ui://memorybridge/archive-v4.html"
 # Keep previous URIs alive so cached ChatGPT cards continue to load the fixed
 # direct-call UI while the refreshed tool snapshot uses the newest URI.
 ARCHIVE_PREVIOUS_RESOURCE_URI = "ui://memorybridge/archive-v2.html"
+ARCHIVE_PRIOR_RESOURCE_URI = "ui://memorybridge/archive-v3.html"
 ARCHIVE_LEGACY_RESOURCE_URI = "ui://memorybridge/archive.html"
 # Some ChatGPT custom-app hosts qualify component tool calls with the
 # connection slug before forwarding them to the MCP server.
@@ -291,13 +292,25 @@ ARCHIVE_WIDGET_HTML = r"""<!doctype html>
     }
 
     async function callTool(name, args) {
-      // MCP Apps is the portable path and is the recommended ChatGPT path.
-      // Keep the ChatGPT alias as a fallback for older hosts.
+      // ChatGPT exposes window.openai.callTool as its compatibility bridge.
+      // Prefer it here: some ChatGPT desktop hosts currently qualify the
+      // standard tools/call name with an escaped connection slug before the
+      // request reaches the remote MCP server.
+      let compatibilityError = null;
+      if (window.openai && typeof window.openai.callTool === "function") {
+        try {
+          return await window.openai.callTool(name, args);
+        } catch (error) {
+          compatibilityError = error;
+        }
+      }
       try {
         return await request("tools/call", {name: name, arguments: args});
       } catch (bridgeError) {
-        if (window.openai && typeof window.openai.callTool === "function") {
-          return window.openai.callTool(name, args);
+        if (compatibilityError) {
+          const first = compatibilityError.message || String(compatibilityError);
+          const second = bridgeError.message || String(bridgeError);
+          throw new Error(first + "；" + second);
         }
         throw bridgeError;
       }
