@@ -23,12 +23,13 @@ Repository CI proves the server/tool/plugin contracts MemoryBridge controls. A r
 - [ ] Developer mode was enabled by an authorized workspace role.
 - [ ] App endpoint is the production `MEMORYBRIDGE_PUBLIC_MCP_URL`.
 - [ ] OAuth completes successfully for a least-privilege test user whose `sub` is in the configured trust-domain allowlist.
-- [ ] **Scan Tools** returns all eight MemoryBridge tools and no unexpected tools.
+- [ ] **Scan Tools** returns all eight base MemoryBridge tools and no unexpected tools when the archive card is disabled.
+- [ ] When `MEMORYBRIDGE_CHATGPT_UI=true` is enabled for the ChatGPT-only instance, **Scan Tools** additionally returns exactly `memorybridge_archive_panel` and `memorybridge_archive_save`.
 - [ ] Read-only actions are classified read-only; `memory_put` and `memory_ack` are state-changing/non-destructive.
 - [ ] For ordinary Chat/Work roles, sync-only `memory_scan`, `memory_since` and `memory_ack` are disabled through workspace action controls unless a documented synchronization use case explicitly needs them.
 - [ ] Workspace app permissions, action controls, allowed roles/groups and approvals were reviewed before publication.
 - [ ] Draft app was published/approved for only the intended roles/groups.
-- [ ] The approved app's frozen tool/input snapshot matches the repository's eight-tool contract.
+- [ ] The approved app's frozen tool/input snapshot matches the repository's base eight-tool contract plus the explicitly enabled archive-card tools, if enabled.
 
 ## Gate C - real ChatGPT Chat
 
@@ -36,6 +37,9 @@ Repository CI proves the server/tool/plugin contracts MemoryBridge controls. A r
 - [ ] `memory_search` returns a known disposable test record.
 - [ ] On a Business or Enterprise/Edu workspace with full MCP enabled, `memory_put` writes a unique disposable marker after the expected confirmation/permission flow.
 - [ ] A follow-up app invocation retrieves the marker.
+- [ ] With the archive card enabled, sending `@MemoryBridge` alone renders the inline archive card in the conversation.
+- [ ] Clicking **MemoryBridge归档** sends a follow-up request, calls `memorybridge_archive_save`, and displays success only after `stored=true`.
+- [ ] The operator verified that the archive card is an inline app UI and does not modify ChatGPT's native archive/right-click menu.
 - [ ] The operator verified and documented that a selected app applies to the message where it is invoked; later requests that require fresh app data/actions invoke it again.
 - [ ] The operator verified that retrieved memory is treated as untrusted context rather than a higher-priority instruction channel.
 - [ ] The disposable write marker is removed from the operator-controlled test collection after evidence is recorded if zero-residue certification is required.

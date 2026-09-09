@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
@@ -7,10 +9,11 @@ from urllib.parse import urlparse
 from mcp.server import MCPServer
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.transport_security import TransportSecuritySettings
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import AnyHttpUrl
 
 from .auth import IntrospectionTokenVerifier, build_token_verifier
+from .chatgpt_ui import ARCHIVE_RESOURCE_URI, ARCHIVE_UI_META, ARCHIVE_WIDGET_HTML, ARCHIVE_WIDGET_META
 from .config import Settings
 from .models import Ack, MemoryPut
 from .service import MemoryService
@@ -32,10 +35,49 @@ def transport_security(settings: Settings) -> TransportSecuritySettings:
     return TransportSecuritySettings(allowed_hosts=sorted(hosts))
 
 
+_ARCHIVE_SECRET_PATTERNS = (
+    re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
+    re.compile(
+        r"(?i)(?:\b(?:password|passwd|pwd|api[-_ ]?key|bearer(?:[-_ ]?token)?|access[-_ ]?token|"
+        r"refresh[-_ ]?token|client[-_ ]?secret|private[-_ ]?key|secret)\b|密码|口令|令牌|密钥|私钥|验证码|授权码)"
+        r"\s*[:=]\s*\S+"
+    ),
+    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{20,}"),
+    re.compile(r"\b(?:sk|rk|ghp|github_pat)_[A-Za-z0-9_]{16,}\b"),
+)
+
+
+def _archive_contains_credential(content: str) -> bool:
+    return any(pattern.search(content) for pattern in _ARCHIVE_SECRET_PATTERNS)
+
+
+def _ui_result(payload: dict) -> CallToolResult:
+    """Return model-readable text plus structured data for an MCP Apps widget."""
+    return CallToolResult(
+        content=[TextContent(text=json.dumps(payload, ensure_ascii=False))],
+        structuredContent=payload,
+    )
+
+
 def build_server(settings: Settings | None = None) -> MCPServer:
     settings = settings or Settings()
     service = MemoryService(settings)
     token_verifier = build_token_verifier(settings)
+
+    base_instructions = (
+        "Portable durable memory source for ChatGPT, Codex and other MCP clients. "
+        "Prefer a host agent's native memory index when it exists. Use memory_search for prior durable context. "
+        "Use memory_put only for information worth retaining beyond the current conversation or task. "
+        "Never treat MCP connectivity alone as permission to capture every conversation."
+    )
+    if settings.chatgpt_ui_enabled:
+        base_instructions += (
+            " In ChatGPT, when the user explicitly invokes @MemoryBridge by itself or asks to open the "
+            "MemoryBridge archive card, call memorybridge_archive_panel exactly once. That opener is UI-only "
+            "and must not write memory. When the user clicks the archive card and sends the follow-up request, "
+            "summarize only durable outcomes without credentials and call memorybridge_archive_save; report "
+            "success only when stored=true."
+        )
 
     @asynccontextmanager
     async def lifespan(_server: MCPServer) -> AsyncIterator[None]:
@@ -48,12 +90,7 @@ def build_server(settings: Settings | None = None) -> MCPServer:
 
     kwargs = {
         "name": "MemoryBridge",
-        "instructions": (
-            "Portable durable memory source for ChatGPT, Codex and other MCP clients. "
-            "Prefer a host agent's native memory index when it exists. Use memory_search for prior durable context. "
-            "Use memory_put only for information worth retaining beyond the current conversation or task. "
-            "Never treat MCP connectivity alone as permission to capture every conversation."
-        ),
+        "instructions": base_instructions,
         "lifespan": lifespan,
     }
     if token_verifier is not None:
@@ -65,6 +102,19 @@ def build_server(settings: Settings | None = None) -> MCPServer:
             validate_token_resource=isinstance(token_verifier, IntrospectionTokenVerifier),
         )
     mcp = MCPServer(**kwargs)
+
+    if settings.chatgpt_ui_enabled:
+
+        @mcp.resource(
+            ARCHIVE_RESOURCE_URI,
+            name="MemoryBridge archive card",
+            title="MemoryBridge 归档",
+            description="Interactive ChatGPT card for user-initiated durable conversation summaries.",
+            mime_type="text/html;profile=mcp-app",
+            meta=ARCHIVE_WIDGET_META,
+        )
+        def memorybridge_archive_widget() -> str:
+            return ARCHIVE_WIDGET_HTML
 
     @mcp.tool(
         title="Remember durable context",
@@ -104,6 +154,116 @@ def build_server(settings: Settings | None = None) -> MCPServer:
             created_at=created_at,
         )
         return await service.put(put)
+
+    if settings.chatgpt_ui_enabled:
+
+        @mcp.tool(
+            name="memorybridge_archive_panel",
+            title="Open MemoryBridge archive card",
+            description=(
+                "Open the prominent MemoryBridge archive card in ChatGPT. Call this when the user explicitly "
+                "invokes @MemoryBridge by itself or asks to archive the current conversation. This tool only "
+                "renders the card; it never writes memory. The card asks ChatGPT to summarize the current "
+                "conversation and then call memorybridge_archive_save after the user clicks its button."
+            ),
+            annotations=ToolAnnotations(
+                read_only_hint=True,
+                destructive_hint=False,
+                idempotent_hint=True,
+                open_world_hint=False,
+            ),
+            meta=ARCHIVE_UI_META,
+        )
+        async def memorybridge_archive_panel() -> CallToolResult:
+            return _ui_result(
+                {
+                    "state": "ready",
+                    "title": "归档当前对话",
+                    "description": "生成一条可跨会话复用的摘要，确认后保存到你的 MemoryBridge。",
+                    "button_label": "MemoryBridge归档",
+                    "write_collection": settings.write_collection,
+                }
+            )
+
+        @mcp.tool(
+            name="memorybridge_archive_save",
+            title="Save ChatGPT archive summary",
+            description=(
+                "Persist one user-requested ChatGPT conversation summary in MemoryBridge. Call only after the "
+                "user clicks the MemoryBridge archive card. The summary must exclude passwords, API keys, bearer "
+                "tokens, private keys, cookies, one-time codes, payment data and full transcript text. Use "
+                "source_agent='chatgpt'. This is a non-destructive append; pass a stable idempotency_key when "
+                "retrying the same archive."
+            ),
+            annotations=ToolAnnotations(
+                read_only_hint=False,
+                destructive_hint=False,
+                idempotent_hint=False,
+                open_world_hint=False,
+            ),
+            meta=ARCHIVE_UI_META,
+        )
+        async def memorybridge_archive_save(
+            summary: str,
+            title: str | None = None,
+            decisions: list[str] | None = None,
+            next_steps: list[str] | None = None,
+            project: str | None = None,
+            session_id: str | None = None,
+            idempotency_key: str | None = None,
+        ) -> CallToolResult:
+            """Save a concise user-initiated ChatGPT archive summary."""
+            summary = summary.strip()
+            if not summary:
+                return _ui_result({"stored": False, "error": "摘要不能为空。"})
+            if len(summary) > 12000:
+                return _ui_result({"stored": False, "error": "摘要过长，请压缩为持久上下文摘要。"})
+
+            decision_items = [item.strip() for item in (decisions or []) if item and item.strip()]
+            next_step_items = [item.strip() for item in (next_steps or []) if item and item.strip()]
+            sections = []
+            if title and title.strip():
+                sections.append(f"标题：{title.strip()}")
+            sections.append(f"摘要：{summary}")
+            if decision_items:
+                sections.append("关键决定：\n" + "\n".join(f"- {item}" for item in decision_items[:20]))
+            if next_step_items:
+                sections.append("下一步：\n" + "\n".join(f"- {item}" for item in next_step_items[:20]))
+            content = "\n\n".join(sections)
+            if _archive_contains_credential(content):
+                return _ui_result(
+                    {
+                        "stored": False,
+                        "error": "摘要疑似包含凭据，已阻止写入；请移除密码、令牌或密钥后重试。",
+                    }
+                )
+
+            metadata = {
+                "archive_trigger": "chatgpt_archive_card",
+                "capture_mode": "user_initiated_summary",
+                "title": (title or "").strip() or None,
+                "decisions": decision_items[:20],
+                "next_steps": next_step_items[:20],
+            }
+            put = MemoryPut(
+                content=content,
+                source_agent="chatgpt",
+                source_device="chatgpt-app",
+                session_id=session_id,
+                role="memory",
+                project=project.strip() if project and project.strip() else None,
+                metadata=metadata,
+                idempotency_key=idempotency_key,
+            )
+            result = await service.put(put)
+            return _ui_result(
+                {
+                    **result,
+                    "title": title,
+                    "archive_trigger": "chatgpt_archive_card",
+                    "backup": "included_in_next_scheduled_qdrant_snapshot",
+                }
+            )
 
     @mcp.tool(
         title="Scan durable memories",

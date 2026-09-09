@@ -19,7 +19,8 @@ Official references, re-verified 2026-09-08:
 The repository owns and tests the following host-facing contract:
 
 - remote Streamable HTTP MCP endpoint;
-- the exact eight MemoryBridge tools returned by `tools/list`;
+- the exact eight base MemoryBridge tools returned by `tools/list`;
+- an opt-in ChatGPT-only MCP Apps archive card with two additional UI tools;
 - stable input schemas and human-readable descriptions;
 - safety annotations that distinguish read-only tools from write/state tools;
 - existing static bearer verification for capture-enabled agent clients;
@@ -79,7 +80,7 @@ Current OpenAI setup is performed by a supported workspace admin/authorized deve
 1. Enable Developer mode for the eligible workspace/account.
 2. Create/register a custom MCP app and provide the public HTTPS MemoryBridge MCP endpoint.
 3. Select OAuth as the authentication mechanism and complete the authorization flow.
-4. Scan/refresh tools. The app must expose exactly:
+4. Scan/refresh tools. The base app must expose exactly:
    - `memory_put`
    - `memory_scan`
    - `memory_since`
@@ -88,12 +89,29 @@ Current OpenAI setup is performed by a supported workspace admin/authorized deve
    - `memory_ack`
    - `memory_status`
    - `memory_search`
-5. Review the annotations/action risk. `memory_put` and `memory_ack` are state-changing but non-destructive; the remaining tools are read-only.
+   When `MEMORYBRIDGE_CHATGPT_UI=true` is enabled on the ChatGPT-only instance, also approve:
+   - `memorybridge_archive_panel` (read-only UI opener)
+   - `memorybridge_archive_save` (non-destructive summary write)
+5. Review the annotations/action risk. `memory_put`, `memory_ack`, and `memorybridge_archive_save` are state-changing but non-destructive; the remaining tools are read-only.
 6. Run the deployment tests below, review the frozen tool snapshot/actions, then publish using the workspace's access/action controls.
 
 Full MCP write/modify support is currently a beta capability for ChatGPT Business and Enterprise/Edu on ChatGPT web. Pro can use developer-mode custom apps with read/fetch permissions, but full MCP write is not currently available there. Do not advertise broader write availability without re-checking current OpenAI product documentation.
 
-ChatGPT freezes an approved app's available tools and inputs. If MemoryBridge later changes a tool incompatibly, an admin must refresh/review the actions before relying on the new contract. This repository therefore treats the eight-tool surface as a compatibility contract.
+ChatGPT freezes an approved app's available tools and inputs. If MemoryBridge later changes a tool incompatibly, an admin must refresh/review the actions before relying on the new contract. This repository therefore treats the eight-tool surface as the base compatibility contract and the two archive-card tools as an explicitly enabled ChatGPT extension.
+
+## ChatGPT archive card
+
+The ChatGPT-only instance can expose an optional MCP Apps UI card. Set `MEMORYBRIDGE_CHATGPT_UI=true` only on that instance; leave it unset for the legacy Codex/Hermes/OpenClaw endpoint.
+
+In a new ChatGPT message, explicitly select the app with:
+
+```text
+@MemoryBridge
+```
+
+The server instructions ask ChatGPT to call `memorybridge_archive_panel`, which renders an inline card in the conversation. The card contains the prominent **MemoryBridge归档** button. Clicking it sends a follow-up request to ChatGPT through the standard `ui/message` bridge. ChatGPT then produces a concise durable summary and calls `memorybridge_archive_save`; the server writes the summary to `memorybridge_raw` and returns `stored=true` before the card shows success.
+
+`@MemoryBridge` is an app selection, not a custom `/` slash command and not an input-text expansion. The model still decides to call the opener tool based on the explicit app invocation and server instructions. The card is rendered alongside the conversation, not in ChatGPT's native archive or right-click menu. If the approved app has a frozen tool snapshot, use **Scan/refresh tools** after enabling this extension.
 
 ## Package the Plugin for ChatGPT Chat / Work
 

@@ -58,6 +58,12 @@ class Settings:
     host: str = os.getenv("MEMORYBRIDGE_HOST", "127.0.0.1")
     port: int = _int("MEMORYBRIDGE_PORT", 8765)
     public_mcp_url: str = os.getenv("MEMORYBRIDGE_PUBLIC_MCP_URL", "http://127.0.0.1:8765/mcp")
+    chatgpt_ui_enabled: bool = os.getenv("MEMORYBRIDGE_CHATGPT_UI", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     bearer_tokens: tuple[str, ...] = _csv("MEMORYBRIDGE_BEARER_TOKENS")
     auth_issuer: str = os.getenv("MEMORYBRIDGE_AUTH_ISSUER", "https://memorybridge.invalid")
     auth_required_scopes: tuple[str, ...] = _csv("MEMORYBRIDGE_AUTH_REQUIRED_SCOPES") or ("memory",)

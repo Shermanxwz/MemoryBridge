@@ -77,7 +77,8 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the detailed invariants and data fl
 
 ## MCP tool contract
 
-MemoryBridge exposes exactly eight host-facing tools:
+MemoryBridge exposes exactly eight base host-facing tools. The ChatGPT-only deployment can opt in to two additional
+MCP Apps UI tools without changing the legacy endpoint:
 
 - `memory_put` — append durable context; state-changing, non-destructive.
 - `memory_scan` — page raw durable memories for import/bootstrap.
@@ -88,8 +89,14 @@ MemoryBridge exposes exactly eight host-facing tools:
 - `memory_status` — health, counts, stream lag, archive and fallback state.
 - `memory_search` — vector search with deterministic lexical/raw degradation.
 
+When `MEMORYBRIDGE_CHATGPT_UI=true` is set only on the ChatGPT instance, it additionally exposes:
+
+- `memorybridge_archive_panel` — render the inline ChatGPT archive card without writing.
+- `memorybridge_archive_save` — append the user-requested concise ChatGPT summary to `memorybridge_raw`.
+
 Tool names, schemas and safety annotations are a compatibility surface. The ChatGPT seal workflow validates them
-both in-process and over the packaged server's authenticated Streamable HTTP wire path.
+both in-process and over the packaged server's authenticated Streamable HTTP wire path. The archive-card tools are
+opt-in and do not appear on the legacy Codex/Hermes/OpenClaw surface.
 
 ## Authentication
 
