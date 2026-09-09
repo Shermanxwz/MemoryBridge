@@ -7,6 +7,27 @@ ARCHIVE_RESOURCE_URI = "ui://memorybridge/archive-v3.html"
 # direct-call UI while the refreshed tool snapshot uses the newest URI.
 ARCHIVE_PREVIOUS_RESOURCE_URI = "ui://memorybridge/archive-v2.html"
 ARCHIVE_LEGACY_RESOURCE_URI = "ui://memorybridge/archive.html"
+# Some ChatGPT custom-app hosts qualify component tool calls with the
+# connection slug before forwarding them to the MCP server.
+ARCHIVE_HOST_TOOL_PREFIX = "memorybridge_mcp_archive."
+
+
+def normalize_archive_host_tool_name(name: str) -> str:
+    """Normalize ChatGPT's qualified component-tool names at the server edge.
+
+    Some hosts send the connection slug as a normal MCP tool-name prefix;
+    others preserve Markdown-style escaped underscores (``\\_``) when sending
+    the component call. Both forms identify the same canonical tool and must
+    never become separately registered tools.
+    """
+    if not isinstance(name, str):
+        return name
+
+    unescaped = name.replace(r"\_", "_")
+    if unescaped.startswith(ARCHIVE_HOST_TOOL_PREFIX):
+        return unescaped[len(ARCHIVE_HOST_TOOL_PREFIX) :]
+    return name
+
 
 ARCHIVE_UI_META = {
     "ui": {

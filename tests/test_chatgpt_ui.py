@@ -89,6 +89,22 @@ def test_chatgpt_archive_panel_is_ui_only_and_save_writes_chatgpt_metadata():
         assert put.source_device == "chatgpt-app"
         assert put.metadata["archive_trigger"] == "chatgpt_archive_card"
         assert "密码" not in put.content
+
+        namespaced_result = asyncio.run(
+            server.call_tool(
+                "memorybridge_mcp_archive.memorybridge_archive_save",
+                {"summary": "组件调用名称兼容已验证。"},
+            )
+        )
+        assert namespaced_result.structured_content["stored"] is True
+
+        escaped_namespaced_result = asyncio.run(
+            server.call_tool(
+                r"memorybridge\_mcp\_archive.memorybridge\_archive\_save",
+                {"summary": "转义组件调用名称兼容已验证。"},
+            )
+        )
+        assert escaped_namespaced_result.structured_content["stored"] is True
     finally:
         asyncio.run(server._memorybridge_service.close())
 

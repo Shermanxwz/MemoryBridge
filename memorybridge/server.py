@@ -21,6 +21,7 @@ from .chatgpt_ui import (
     ARCHIVE_UI_META,
     ARCHIVE_WIDGET_HTML,
     ARCHIVE_WIDGET_META,
+    normalize_archive_host_tool_name,
 )
 from .config import Settings
 from .models import Ack, MemoryPut
@@ -409,6 +410,19 @@ def build_server(settings: Settings | None = None) -> MCPServer:
         return result.model_dump()
 
     mcp._memorybridge_service = service  # type: ignore[attr-defined]
+    if settings.chatgpt_ui_enabled:
+        # ChatGPT's custom-app bridge can forward a component tools/call with
+        # the connection slug qualified onto the tool name. The MCP tool
+        # registry stores the canonical name, so normalize that host-only
+        # prefix at the protocol boundary without exposing a duplicate tool.
+        native_call_tool = mcp.call_tool
+
+        async def call_tool_with_chatgpt_namespace(name, arguments, context=None):
+            name = normalize_archive_host_tool_name(name)
+            return await native_call_tool(name, arguments, context)
+
+        mcp.call_tool = call_tool_with_chatgpt_namespace
+
     return mcp
 
 
