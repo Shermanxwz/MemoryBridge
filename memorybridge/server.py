@@ -85,9 +85,10 @@ def build_server(settings: Settings | None = None) -> MCPServer:
             " In ChatGPT, when the user explicitly invokes @MemoryBridge by itself or asks to open the "
             "MemoryBridge archive card, first prepare a concise durable summary of the current conversation "
             "(including only useful outcomes, decisions and next steps; never credentials), then call "
-            "memorybridge_archive_panel exactly once with that draft. The panel is UI-only and never writes. "
-            "The card button directly calls memorybridge_archive_save through the MCP Apps bridge; it does not "
-            "send a follow-up chat message. Report success only when stored=true."
+            "memorybridge_archive_panel exactly once with a non-empty summary argument. Never call the panel "
+            "with an empty summary and never stop after writing the draft in chat text. The panel is UI-only "
+            "and never writes. The card button directly calls memorybridge_archive_save through the MCP Apps "
+            "bridge; it does not send a follow-up chat message. Report success only when stored=true."
         )
 
     @asynccontextmanager
@@ -206,10 +207,11 @@ def build_server(settings: Settings | None = None) -> MCPServer:
             title="Open MemoryBridge archive card",
             description=(
                 "Open the prominent MemoryBridge archive card in ChatGPT. Call this when the user explicitly "
-                "invokes @MemoryBridge by itself or asks to archive the current conversation. First prepare a "
-                "concise safe summary and pass it in summary, with optional title, decisions, next_steps, "
-                "project and session_id. This tool only renders a review card; it never writes memory. The "
-                "card button directly calls memorybridge_archive_save through the MCP Apps bridge."
+                "invokes @MemoryBridge by itself or asks to archive the current conversation. You must first "
+                "prepare a concise safe summary and pass a non-empty summary argument in this same tool call; "
+                "do not call this tool with an empty summary. Optional fields are title, decisions, next_steps, "
+                "project and session_id. This tool only renders a review card; it never writes memory. The card "
+                "button directly calls memorybridge_archive_save through the MCP Apps bridge."
             ),
             annotations=ToolAnnotations(
                 read_only_hint=True,
@@ -220,7 +222,7 @@ def build_server(settings: Settings | None = None) -> MCPServer:
             meta=ARCHIVE_UI_META,
         )
         async def memorybridge_archive_panel(
-            summary: str = "",
+            summary: str,
             title: str | None = None,
             decisions: list[str] | None = None,
             next_steps: list[str] | None = None,

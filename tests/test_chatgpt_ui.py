@@ -114,9 +114,12 @@ def test_chatgpt_archive_panel_without_a_draft_never_writes_or_requests_a_prompt
     try:
         service = server._memorybridge_service
         service.put = AsyncMock()
-        result = asyncio.run(server.call_tool("memorybridge_archive_panel", {}))
-        assert result.structured_content["state"] == "draft_required"
-        assert result.structured_content["stored"] is not True
+        try:
+            asyncio.run(server.call_tool("memorybridge_archive_panel", {}))
+        except Exception as exc:
+            assert "summary" in str(exc)
+        else:
+            raise AssertionError("empty archive panel call must be rejected")
         service.put.assert_not_awaited()
     finally:
         asyncio.run(server._memorybridge_service.close())
