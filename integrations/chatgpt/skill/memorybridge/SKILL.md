@@ -43,6 +43,6 @@ An installed app or plugin does not give MemoryBridge passive access to every Ch
 
 When the user explicitly asks to archive the current ChatGPT conversation, prepare a concise durable summary
 without credentials, then call `memorybridge_archive_panel` with that summary and any useful decisions or next
-steps. The panel only displays a review card. Its confirmation button directly calls
-`memorybridge_archive_save`; do not send a follow-up chat prompt or expose internal tool parameters. Report
-success only when the save result has `stored=true`.
+steps. The panel persists the summary in the same server call and renders the authoritative result card; do not
+send a follow-up chat prompt, call `memorybridge_archive_save` afterward, or expose internal tool parameters.
+Report success only when the panel result has `stored=true`.

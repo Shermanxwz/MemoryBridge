@@ -1,12 +1,14 @@
-"""Optional ChatGPT MCP Apps UI for user-confirmed MemoryBridge archiving."""
+"""Optional ChatGPT MCP Apps UI for explicit MemoryBridge archiving."""
 
 from __future__ import annotations
 
-ARCHIVE_RESOURCE_URI = "ui://memorybridge/archive-v4.html"
-# Keep previous URIs alive so cached ChatGPT cards continue to load the fixed
-# direct-call UI while the refreshed tool snapshot uses the newest URI.
-ARCHIVE_PREVIOUS_RESOURCE_URI = "ui://memorybridge/archive-v2.html"
-ARCHIVE_PRIOR_RESOURCE_URI = "ui://memorybridge/archive-v3.html"
+ARCHIVE_RESOURCE_URI = "ui://memorybridge/archive-v6.html"
+# Keep all previous URIs alive so cached ChatGPT cards continue to load the
+# result-only UI while a refreshed tool snapshot uses the newest URI.
+ARCHIVE_PREVIOUS_RESOURCE_URI = "ui://memorybridge/archive-v5.html"
+ARCHIVE_PRIOR_RESOURCE_URI = "ui://memorybridge/archive-v4.html"
+ARCHIVE_OLDER_RESOURCE_URI = "ui://memorybridge/archive-v3.html"
+ARCHIVE_OLDEST_RESOURCE_URI = "ui://memorybridge/archive-v2.html"
 ARCHIVE_LEGACY_RESOURCE_URI = "ui://memorybridge/archive.html"
 # Some ChatGPT custom-app hosts qualify component tool calls with the
 # connection slug before forwarding them to the MCP server.
@@ -41,9 +43,9 @@ ARCHIVE_UI_META = {
 
 ARCHIVE_WIDGET_META = {"ui": {"prefersBorder": True}}
 
-# The save tool is intentionally callable from the review card after the
-# user's click. Keep the standard MCP Apps visibility and the ChatGPT
-# compatibility flag so both bridge variants can authorize that call.
+# Keep the compatibility save tool available to clients that cannot render a
+# card. The normal archive-panel path writes server-side in one call, so the
+# result card does not depend on a component-side tools/call.
 ARCHIVE_SAVE_UI_META = {
     "ui": {"visibility": ["model", "app"]},
     "openai/widgetAccessible": True,
@@ -149,13 +151,13 @@ ARCHIVE_WIDGET_HTML = r"""<!doctype html>
 <body>
   <section class="card" aria-live="polite">
     <h1 id="title">归档当前对话</h1>
-    <p id="description">先生成一条可跨会话复用的摘要，确认后保存到你的 MemoryBridge。</p>
+    <p id="description">收到归档指令后，服务器会直接保存一条可跨会话复用的摘要。</p>
     <div id="summary" class="summary" hidden></div>
     <div id="decisions" class="section" hidden></div>
     <div id="next-steps" class="section" hidden></div>
     <p class="muted">只保存摘要、决定和下一步；不会保存密码、bearer token、令牌、密钥或完整会话原文。</p>
-    <button id="archive" type="button" disabled>等待摘要草稿</button>
-    <div id="status" class="status">正在等待摘要草稿…</div>
+    <button id="archive" type="button" disabled>归档处理中</button>
+    <div id="status" class="status">正在等待归档结果…</div>
   </section>
   <script>
     const title = document.getElementById("title");
@@ -165,10 +167,6 @@ ARCHIVE_WIDGET_HTML = r"""<!doctype html>
     const nextSteps = document.getElementById("next-steps");
     const button = document.getElementById("archive");
     const status = document.getElementById("status");
-    const archiveRequestId = "chatgpt-archive-" + Date.now() + "-" +
-      Math.random().toString(16).slice(2);
-    let draft = null;
-    let busy = false;
 
     function setStatus(message, kind) {
       status.textContent = message || "";
@@ -218,101 +216,37 @@ ARCHIVE_WIDGET_HTML = r"""<!doctype html>
       if (result.state === "draft" || typeof result.summary === "string") {
         const text = result.summary.trim();
         if (text) {
-          draft = {
-            summary: text,
-            title: typeof result.title === "string" ? result.title : "",
-            decisions: asArray(result.decisions),
-            next_steps: asArray(result.next_steps),
-            project: typeof result.project === "string" ? result.project : "",
-            session_id: typeof result.session_id === "string" ? result.session_id : "",
-            idempotency_key: typeof result.idempotency_key === "string"
-              ? result.idempotency_key : ""
-          };
-          title.textContent = draft.title || "归档当前对话";
-          description.textContent = "摘要草稿已生成。点击后直接保存，不会发送新的对话消息。";
-          summary.textContent = draft.summary;
+          title.textContent = typeof result.title === "string" && result.title
+            ? result.title : "归档当前对话";
+          description.textContent = typeof result.description === "string" && result.description
+            ? result.description : "归档指令已收到，服务器正在保存。";
+          summary.textContent = text;
           summary.hidden = false;
-          renderList(decisions, "已确定", draft.decisions);
-          renderList(nextSteps, "下一步", draft.next_steps);
-          button.disabled = false;
-          button.textContent = "确认归档";
-          setStatus("请确认摘要内容后保存。");
+          renderList(decisions, "已确定", asArray(result.decisions));
+          renderList(nextSteps, "下一步", asArray(result.next_steps));
+          button.disabled = true;
+          button.textContent = "归档处理中";
+          setStatus("服务器正在保存归档…");
         }
       }
 
       if (result.state === "draft_required") {
-        draft = null;
         summary.hidden = true;
         button.disabled = true;
         button.textContent = "等待摘要草稿";
-        setStatus("摘要草稿尚未生成，请重新调用归档卡片。", "error");
+        setStatus("摘要未随归档指令提供，请重新发送 @MemoryBridge 归档。", "error");
       }
 
       if (result.stored === true) {
-        busy = false;
         button.disabled = true;
         button.textContent = "已归档";
+        description.textContent = typeof result.description === "string" && result.description
+          ? result.description : "已根据你的归档指令保存，不需要再次点击。";
         setStatus("已保存到 MemoryBridge。", "ok");
       } else if (result.stored === false && result.error) {
-        busy = false;
-        button.disabled = !draft;
-        button.textContent = draft ? "确认归档" : "等待摘要草稿";
-        setStatus("未保存：" + String(result.error), "error");
-      }
-    }
-
-    function request(method, params) {
-      return new Promise(function (resolve, reject) {
-        const id = "archive-" + Date.now() + "-" + Math.random().toString(16).slice(2);
-        let settled = false;
-        const timer = setTimeout(function () {
-          if (!settled) {
-            settled = true;
-            reject(new Error("请求超时"));
-          }
-        }, 30000);
-        function onMessage(event) {
-          const message = event.data || {};
-          if (message.id !== id) return;
-          window.removeEventListener("message", onMessage);
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          if (message.error) reject(new Error(message.error.message || "请求失败"));
-          else resolve(message.result);
-        }
-        window.addEventListener("message", onMessage);
-        window.parent.postMessage({
-          jsonrpc: "2.0",
-          id: id,
-          method: method,
-          params: params || {}
-        }, "*");
-      });
-    }
-
-    async function callTool(name, args) {
-      // ChatGPT exposes window.openai.callTool as its compatibility bridge.
-      // Prefer it here: some ChatGPT desktop hosts currently qualify the
-      // standard tools/call name with an escaped connection slug before the
-      // request reaches the remote MCP server.
-      let compatibilityError = null;
-      if (window.openai && typeof window.openai.callTool === "function") {
-        try {
-          return await window.openai.callTool(name, args);
-        } catch (error) {
-          compatibilityError = error;
-        }
-      }
-      try {
-        return await request("tools/call", {name: name, arguments: args});
-      } catch (bridgeError) {
-        if (compatibilityError) {
-          const first = compatibilityError.message || String(compatibilityError);
-          const second = bridgeError.message || String(bridgeError);
-          throw new Error(first + "；" + second);
-        }
-        throw bridgeError;
+        button.disabled = true;
+        button.textContent = "归档失败";
+        setStatus("未保存：" + String(result.error) + "。请重新发送 @MemoryBridge 归档。", "error");
       }
     }
 
@@ -337,29 +271,6 @@ ARCHIVE_WIDGET_HTML = r"""<!doctype html>
       render(window.openai.toolInput);
     }
 
-    button.addEventListener("click", async function () {
-      if (busy || !draft || !draft.summary) return;
-      busy = true;
-      button.disabled = true;
-      setStatus("正在直接保存摘要…");
-      const args = {
-        summary: draft.summary,
-        idempotency_key: draft.idempotency_key || archiveRequestId
-      };
-      if (draft.title) args.title = draft.title;
-      if (draft.decisions.length) args.decisions = draft.decisions;
-      if (draft.next_steps.length) args.next_steps = draft.next_steps;
-      if (draft.project) args.project = draft.project;
-      if (draft.session_id) args.session_id = draft.session_id;
-      try {
-        render(resultFrom(await callTool("memorybridge_archive_save", args)));
-      } catch (error) {
-        busy = false;
-        button.disabled = false;
-        const detail = error && error.message ? "：" + error.message : "，请稍后重试";
-        setStatus("未保存" + detail + "。", "error");
-      }
-    });
   </script>
 </body>
 </html>

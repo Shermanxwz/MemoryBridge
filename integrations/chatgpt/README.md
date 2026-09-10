@@ -90,9 +90,9 @@ Current OpenAI setup is performed by a supported workspace admin/authorized deve
    - `memory_status`
    - `memory_search`
    When `MEMORYBRIDGE_CHATGPT_UI=true` is enabled on the ChatGPT-only instance, also approve:
-   - `memorybridge_archive_panel` (read-only UI opener)
+   - `memorybridge_archive_panel` (summary write plus result-card opener)
    - `memorybridge_archive_save` (non-destructive summary write)
-5. Review the annotations/action risk. `memory_put`, `memory_ack`, and `memorybridge_archive_save` are state-changing but non-destructive; the remaining tools are read-only.
+5. Review the annotations/action risk. `memory_put`, `memory_ack`, `memorybridge_archive_panel`, and `memorybridge_archive_save` are state-changing but non-destructive; the remaining tools are read-only.
 6. Run the deployment tests below, review the frozen tool snapshot/actions, then publish using the workspace's access/action controls.
 
 Full MCP write/modify support is currently a beta capability for ChatGPT Business and Enterprise/Edu on ChatGPT web. Pro can use developer-mode custom apps with read/fetch permissions, but full MCP write is not currently available there. Do not advertise broader write availability without re-checking current OpenAI product documentation.
@@ -109,7 +109,7 @@ In a new ChatGPT message, explicitly select the app with:
 @MemoryBridge
 ```
 
-The server instructions ask ChatGPT to first prepare a concise safe summary and call `memorybridge_archive_panel` with that draft. The tool renders an inline review card in the conversation. The card displays the summary and contains a confirmation button. Clicking it calls `memorybridge_archive_save` directly through the MCP Apps `tools/call` bridge; it does not send a follow-up chat prompt or expose internal tool parameters. The server writes the summary to `memorybridge_raw` and returns `stored=true` before the card shows success.
+The server instructions ask ChatGPT to first prepare a concise safe summary and call `memorybridge_archive_panel` with that draft. The tool writes the summary to `memorybridge_raw` in the same server call and then renders an authoritative result card. The card displays the summary and a disabled status button; it does not depend on a second component-side `tools/call` and does not send a follow-up chat prompt or expose internal tool parameters. The server returns `stored=true` before the card shows success.
 
 `@MemoryBridge` is an app selection, not a custom `/` slash command and not an input-text expansion. The model still decides to call the opener tool based on the explicit app invocation and server instructions. The card is rendered alongside the conversation, not in ChatGPT's native archive or right-click menu. If the approved app has a frozen tool snapshot, use **Scan/refresh tools** after enabling this extension.
 

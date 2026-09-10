@@ -21,12 +21,13 @@ def test_chatgpt_archive_ui_is_opt_in_and_does_not_expand_the_legacy_surface():
         asyncio.run(enabled._memorybridge_service.close())
 
 
-def test_chatgpt_archive_widget_uses_the_mcp_apps_bridge_and_safe_button_text():
+def test_chatgpt_archive_widget_is_result_only_and_keeps_safe_button_text():
     assert ARCHIVE_RESOURCE_URI.startswith("ui://")
-    assert ARCHIVE_RESOURCE_URI.endswith("archive-v4.html")
-    assert "确认归档" in ARCHIVE_WIDGET_HTML
-    assert 'request("tools/call"' in ARCHIVE_WIDGET_HTML
-    assert "memorybridge_archive_save" in ARCHIVE_WIDGET_HTML
+    assert ARCHIVE_RESOURCE_URI.endswith("archive-v6.html")
+    assert "已归档" in ARCHIVE_WIDGET_HTML
+    assert "归档处理中" in ARCHIVE_WIDGET_HTML
+    assert 'request("tools/call"' not in ARCHIVE_WIDGET_HTML
+    assert "memorybridge_archive_save" not in ARCHIVE_WIDGET_HTML
     assert "bearer token" in ARCHIVE_WIDGET_HTML.lower()
     assert "ui/message" not in ARCHIVE_WIDGET_HTML
     assert "sendFollowUpMessage" not in ARCHIVE_WIDGET_HTML
@@ -46,7 +47,7 @@ def test_chatgpt_archive_tools_link_to_the_ui_resource():
         asyncio.run(server._memorybridge_service.close())
 
 
-def test_chatgpt_archive_panel_is_ui_only_and_save_writes_chatgpt_metadata():
+def test_chatgpt_archive_panel_writes_chatgpt_metadata_and_save_remains_compatible():
     server = build_server(Settings(chatgpt_ui_enabled=True))
     try:
         service = server._memorybridge_service
@@ -67,9 +68,18 @@ def test_chatgpt_archive_panel_is_ui_only_and_save_writes_chatgpt_metadata():
                 },
             )
         )
-        assert panel.structured_content["state"] == "draft"
+        assert panel.structured_content["state"] == "stored"
+        assert panel.structured_content["stored"] is True
         assert panel.structured_content["summary"] == "已确定使用 ChatGPT 应用内归档卡片。"
-        service.put.assert_not_awaited()
+        service.put.assert_awaited_once()
+        panel_put = service.put.await_args.args[0]
+        assert panel_put.source_agent == "chatgpt"
+        assert panel_put.source_device == "chatgpt-app"
+        assert panel_put.metadata["archive_trigger"] == "chatgpt_archive_card"
+        assert panel_put.idempotency_key == "archive-test-1"
+        assert "密码" not in panel_put.content
+
+        service.put.reset_mock()
 
         result = asyncio.run(
             server.call_tool(

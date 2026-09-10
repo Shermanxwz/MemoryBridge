@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import AsyncIterator
@@ -15,6 +16,8 @@ from pydantic import AnyHttpUrl
 from .auth import IntrospectionTokenVerifier, build_token_verifier
 from .chatgpt_ui import (
     ARCHIVE_LEGACY_RESOURCE_URI,
+    ARCHIVE_OLDER_RESOURCE_URI,
+    ARCHIVE_OLDEST_RESOURCE_URI,
     ARCHIVE_PREVIOUS_RESOURCE_URI,
     ARCHIVE_PRIOR_RESOURCE_URI,
     ARCHIVE_RESOURCE_URI,
@@ -69,6 +72,24 @@ def _ui_result(payload: dict) -> CallToolResult:
     )
 
 
+def _chatgpt_archive_idempotency_key(
+    content: str,
+    session_id: str | None,
+    idempotency_key: str | None,
+) -> str:
+    """Make retries of one explicit archive request safe when the host omits a key."""
+    provided = (idempotency_key or "").strip()
+    if provided:
+        return provided
+    material = json.dumps(
+        {"content": content, "session_id": session_id or ""},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
+    return f"chatgpt-auto-archive-{digest}"
+
+
 def build_server(settings: Settings | None = None) -> MCPServer:
     settings = settings or Settings()
     service = MemoryService(settings)
@@ -86,9 +107,10 @@ def build_server(settings: Settings | None = None) -> MCPServer:
             "MemoryBridge archive card, first prepare a concise durable summary of the current conversation "
             "(including only useful outcomes, decisions and next steps; never credentials), then call "
             "memorybridge_archive_panel exactly once with a non-empty summary argument. Never call the panel "
-            "with an empty summary and never stop after writing the draft in chat text. The panel is UI-only "
-            "and never writes. The card button directly calls memorybridge_archive_save through the MCP Apps "
-            "bridge; it does not send a follow-up chat message. Report success only when stored=true."
+            "with an empty summary and never stop after writing the summary in chat text. The panel immediately "
+            "persists the safe summary in the same server call and then renders the result card; do not call "
+            "memorybridge_archive_save afterward and do not tell the user to click a button. Report success "
+            "only when stored=true."
         )
 
     @asynccontextmanager
@@ -140,7 +162,7 @@ def build_server(settings: Settings | None = None) -> MCPServer:
             return ARCHIVE_WIDGET_HTML
         @mcp.resource(
             ARCHIVE_PRIOR_RESOURCE_URI,
-            name="MemoryBridge archive card (v3 URI)",
+            name="MemoryBridge archive card (v4 URI)",
             title="MemoryBridge 归档",
             description="Compatibility URI for cached user-initiated durable conversation summary cards.",
             mime_type="text/html;profile=mcp-app",
@@ -149,6 +171,27 @@ def build_server(settings: Settings | None = None) -> MCPServer:
         def memorybridge_archive_widget_prior() -> str:
             return ARCHIVE_WIDGET_HTML
 
+        @mcp.resource(
+            ARCHIVE_OLDER_RESOURCE_URI,
+            name="MemoryBridge archive card (v3 URI)",
+            title="MemoryBridge 归档",
+            description="Compatibility URI for cached user-initiated durable conversation summary cards.",
+            mime_type="text/html;profile=mcp-app",
+            meta=ARCHIVE_WIDGET_META,
+        )
+        def memorybridge_archive_widget_older() -> str:
+            return ARCHIVE_WIDGET_HTML
+
+        @mcp.resource(
+            ARCHIVE_OLDEST_RESOURCE_URI,
+            name="MemoryBridge archive card (v2 URI)",
+            title="MemoryBridge 归档",
+            description="Compatibility URI for cached user-initiated durable conversation summary cards.",
+            mime_type="text/html;profile=mcp-app",
+            meta=ARCHIVE_WIDGET_META,
+        )
+        def memorybridge_archive_widget_oldest() -> str:
+            return ARCHIVE_WIDGET_HTML
 
         @mcp.resource(
             ARCHIVE_LEGACY_RESOURCE_URI,
@@ -210,13 +253,13 @@ def build_server(settings: Settings | None = None) -> MCPServer:
                 "invokes @MemoryBridge by itself or asks to archive the current conversation. You must first "
                 "prepare a concise safe summary and pass a non-empty summary argument in this same tool call; "
                 "do not call this tool with an empty summary. Optional fields are title, decisions, next_steps, "
-                "project and session_id. This tool only renders a review card; it never writes memory. The card "
-                "button directly calls memorybridge_archive_save through the MCP Apps bridge."
+                "project and session_id. This tool immediately persists the summary in MemoryBridge and then "
+                "renders a result card; it does not require a component-side tools/call."
             ),
             annotations=ToolAnnotations(
-                read_only_hint=True,
+                read_only_hint=False,
                 destructive_hint=False,
-                idempotent_hint=True,
+                idempotent_hint=False,
                 open_world_hint=False,
             ),
             meta=ARCHIVE_UI_META,
@@ -230,7 +273,7 @@ def build_server(settings: Settings | None = None) -> MCPServer:
             session_id: str | None = None,
             idempotency_key: str | None = None,
         ) -> CallToolResult:
-            """Render a review card for a prepared summary without writing memory."""
+            """Persist a prepared summary and render the authoritative archive result card."""
             summary = (summary or "").strip()
             if not summary:
                 return _ui_result(
@@ -238,7 +281,7 @@ def build_server(settings: Settings | None = None) -> MCPServer:
                         "state": "draft_required",
                         "stored": False,
                         "title": "归档当前对话",
-                        "description": "请先生成摘要草稿，再确认保存。",
+                        "description": "摘要未随归档指令提供，请重新发送 @MemoryBridge 归档。",
                         "button_label": "等待摘要草稿",
                         "write_collection": settings.write_collection,
                     }
@@ -265,19 +308,44 @@ def build_server(settings: Settings | None = None) -> MCPServer:
                         "error": "摘要疑似包含凭据，已阻止展示；请移除密码、令牌或密钥后重试。",
                     }
                 )
+            content = "\n\n".join(sections)
+            archive_key = _chatgpt_archive_idempotency_key(content, session_id, idempotency_key)
+            metadata = {
+                "archive_trigger": "chatgpt_archive_card",
+                "capture_mode": "user_initiated_summary",
+                "title": clean_title or None,
+                "decisions": decision_items[:20],
+                "next_steps": next_step_items[:20],
+            }
+            put = MemoryPut(
+                content=content,
+                source_agent="chatgpt",
+                source_device="chatgpt-app",
+                session_id=session_id,
+                role="memory",
+                project=project.strip() if project and project.strip() else None,
+                metadata=metadata,
+                idempotency_key=archive_key,
+            )
+            result = await service.put(put)
             return _ui_result(
                 {
-                    "state": "draft",
+                    **result,
+                    "state": "stored" if result.get("stored") else "error",
                     "title": clean_title or "归档当前对话",
-                    "description": "摘要草稿已生成。确认后直接保存，不会发送新的对话消息。",
-                    "button_label": "确认归档",
+                    "description": "已根据你的归档指令保存，不需要再次点击。"
+                    if result.get("stored")
+                    else "服务器未完成保存，请重新发送 @MemoryBridge 归档。",
+                    "button_label": "已归档" if result.get("stored") else "归档失败",
                     "summary": summary,
                     "decisions": decision_items[:20],
                     "next_steps": next_step_items[:20],
                     "project": project.strip() if project and project.strip() else None,
                     "session_id": session_id,
-                    "idempotency_key": idempotency_key,
+                    "idempotency_key": archive_key,
                     "write_collection": settings.write_collection,
+                    "archive_trigger": "chatgpt_archive_card",
+                    "backup": "included_in_next_scheduled_qdrant_snapshot",
                 }
             )
 
@@ -285,8 +353,9 @@ def build_server(settings: Settings | None = None) -> MCPServer:
             name="memorybridge_archive_save",
             title="Save ChatGPT archive summary",
             description=(
-                "Persist one user-requested ChatGPT conversation summary in MemoryBridge. Call only after the "
-                "user clicks the MemoryBridge archive card. The summary must exclude passwords, API keys, bearer "
+                "Persist one user-requested ChatGPT conversation summary in MemoryBridge. The archive panel "
+                "already performs this write; use this tool only as a model/client fallback when a panel cannot "
+                "be rendered. The summary must exclude passwords, API keys, bearer "
                 "tokens, private keys, cookies, one-time codes, payment data and full transcript text. Use "
                 "source_agent='chatgpt'. This is a non-destructive append; pass a stable idempotency_key when "
                 "retrying the same archive."
