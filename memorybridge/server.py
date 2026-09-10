@@ -23,6 +23,7 @@ from .chatgpt_ui import (
     ARCHIVE_RESOURCE_URI,
     ARCHIVE_SAVE_UI_META,
     ARCHIVE_UI_META,
+    ARCHIVE_V2_RESOURCE_URI,
     ARCHIVE_WIDGET_HTML,
     ARCHIVE_WIDGET_META,
     normalize_archive_host_tool_name,
@@ -162,7 +163,7 @@ def build_server(settings: Settings | None = None) -> MCPServer:
             return ARCHIVE_WIDGET_HTML
         @mcp.resource(
             ARCHIVE_PRIOR_RESOURCE_URI,
-            name="MemoryBridge archive card (v4 URI)",
+            name="MemoryBridge archive card (v5 URI)",
             title="MemoryBridge 归档",
             description="Compatibility URI for cached user-initiated durable conversation summary cards.",
             mime_type="text/html;profile=mcp-app",
@@ -173,7 +174,7 @@ def build_server(settings: Settings | None = None) -> MCPServer:
 
         @mcp.resource(
             ARCHIVE_OLDER_RESOURCE_URI,
-            name="MemoryBridge archive card (v3 URI)",
+            name="MemoryBridge archive card (v4 URI)",
             title="MemoryBridge 归档",
             description="Compatibility URI for cached user-initiated durable conversation summary cards.",
             mime_type="text/html;profile=mcp-app",
@@ -184,13 +185,24 @@ def build_server(settings: Settings | None = None) -> MCPServer:
 
         @mcp.resource(
             ARCHIVE_OLDEST_RESOURCE_URI,
-            name="MemoryBridge archive card (v2 URI)",
+            name="MemoryBridge archive card (v3 URI)",
             title="MemoryBridge 归档",
             description="Compatibility URI for cached user-initiated durable conversation summary cards.",
             mime_type="text/html;profile=mcp-app",
             meta=ARCHIVE_WIDGET_META,
         )
         def memorybridge_archive_widget_oldest() -> str:
+            return ARCHIVE_WIDGET_HTML
+
+        @mcp.resource(
+            ARCHIVE_V2_RESOURCE_URI,
+            name="MemoryBridge archive card (v2 URI)",
+            title="MemoryBridge 归档",
+            description="Compatibility URI for cached user-initiated durable conversation summary cards.",
+            mime_type="text/html;profile=mcp-app",
+            meta=ARCHIVE_WIDGET_META,
+        )
+        def memorybridge_archive_widget_v2() -> str:
             return ARCHIVE_WIDGET_HTML
 
         @mcp.resource(

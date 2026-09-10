@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-ARCHIVE_RESOURCE_URI = "ui://memorybridge/archive-v6.html"
+ARCHIVE_RESOURCE_URI = "ui://memorybridge/archive-v7.html"
 # Keep all previous URIs alive so cached ChatGPT cards continue to load the
 # result-only UI while a refreshed tool snapshot uses the newest URI.
-ARCHIVE_PREVIOUS_RESOURCE_URI = "ui://memorybridge/archive-v5.html"
-ARCHIVE_PRIOR_RESOURCE_URI = "ui://memorybridge/archive-v4.html"
-ARCHIVE_OLDER_RESOURCE_URI = "ui://memorybridge/archive-v3.html"
-ARCHIVE_OLDEST_RESOURCE_URI = "ui://memorybridge/archive-v2.html"
+ARCHIVE_PREVIOUS_RESOURCE_URI = "ui://memorybridge/archive-v6.html"
+ARCHIVE_PRIOR_RESOURCE_URI = "ui://memorybridge/archive-v5.html"
+ARCHIVE_OLDER_RESOURCE_URI = "ui://memorybridge/archive-v4.html"
+ARCHIVE_OLDEST_RESOURCE_URI = "ui://memorybridge/archive-v3.html"
+ARCHIVE_V2_RESOURCE_URI = "ui://memorybridge/archive-v2.html"
 ARCHIVE_LEGACY_RESOURCE_URI = "ui://memorybridge/archive.html"
 # Some ChatGPT custom-app hosts qualify component tool calls with the
 # connection slug before forwarding them to the MCP server.
@@ -252,7 +253,25 @@ ARCHIVE_WIDGET_HTML = r"""<!doctype html>
 
     function resultFrom(value) {
       if (!value || typeof value !== "object") return value;
-      return value.structuredContent || value.structured_content || value;
+      if (value.structuredContent || value.structured_content) {
+        return value.structuredContent || value.structured_content;
+      }
+      if (value.result && typeof value.result === "object") {
+        return resultFrom(value.result);
+      }
+      if (Array.isArray(value.content)) {
+        const textItem = value.content.find(function (item) {
+          return item && item.type === "text" && typeof item.text === "string";
+        });
+        if (textItem) {
+          try {
+            return JSON.parse(textItem.text);
+          } catch (_) {
+            // Fall through for hosts that expose only non-JSON text content.
+          }
+        }
+      }
+      return value;
     }
 
     window.addEventListener("message", function (event) {
@@ -269,6 +288,9 @@ ARCHIVE_WIDGET_HTML = r"""<!doctype html>
 
     if (window.openai && window.openai.toolInput) {
       render(window.openai.toolInput);
+    }
+    if (window.openai && window.openai.toolOutput) {
+      render(resultFrom(window.openai.toolOutput));
     }
 
   </script>
