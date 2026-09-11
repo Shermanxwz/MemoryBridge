@@ -1,12 +1,29 @@
 # MemoryBridge
 
-**Invisible, durable memory fabric for ChatGPT and AI agents.**
+## 中文简介
 
-MemoryBridge is a deliberately small memory and recovery layer built around MCP, Qdrant, crash-safe local spooling,
-and verified archives. It gives multiple AI surfaces one durable source of project context without trying to replace
-each host's native memory/index or pretending that every host exposes the same conversation lifecycle.
+MemoryBridge 是一个基于 MCP 的持久化 AI 记忆与恢复层。它使用 Qdrant 保存原始记忆，通过本地原子 Spool
+和后台重试应对网络或服务中断；Worker 异步构建按模型与维度隔离的向量索引，检索按“向量 → 词法 →
+原始/最近记录”逐级降级。源数据通过已验证的 Qdrant 快照、JSONL.GZ 导出和 SHA-256 清单归档到
+CloudDrive2。
 
-> **Every stored record is recoverable. Every derived index is rebuildable. Capture claims are host-specific and tested.**
+MemoryBridge 连接 ChatGPT、Codex、Hermes 和 OpenClaw，同时保留各宿主自己的原生记忆与索引能力，为多个
+AI 客户端提供可恢复、可重建的统一记忆基础设施。
+
+## English overview
+
+MemoryBridge is a durable AI memory and recovery layer built on MCP. It stores source memories in Qdrant and uses
+crash-safe local spooling with background retries to tolerate network and service failures. A worker asynchronously
+builds generation-scoped vector indexes, while retrieval degrades from vector search to deterministic lexical and
+raw/recent reads. Source data is archived to CloudDrive2 as verified Qdrant snapshots, portable JSONL.GZ exports,
+and SHA-256 manifests.
+
+MemoryBridge connects ChatGPT, Codex, Hermes, and OpenClaw while preserving each host's native memory and index
+capabilities, providing a recoverable and rebuildable shared memory fabric for multiple AI agents.
+
+> **每条源记忆都可恢复；每个派生索引都可重建。**
+>
+> **Every source record is recoverable; every derived index is rebuildable.** Capture claims are host-specific and tested.
 
 ## Supported surfaces
 
@@ -74,6 +91,11 @@ or opaque ranking controller to this reliability path.
 ```
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the detailed invariants and data flow.
+
+The raw/source collections are the durable boundary. The worker writes a disposable collection such as
+`memorybridge_fallback__<model-hash>__<dimension>`; changing the embedding model or dimension creates a new
+generation instead of mixing incompatible vectors. Losing that derived collection temporarily affects vector
+retrieval, but does not lose source memories or prevent lexical/raw recovery.
 
 ## MCP tool contract
 
