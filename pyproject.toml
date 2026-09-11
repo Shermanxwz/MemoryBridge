@@ -27,6 +27,7 @@ memorybridge = "memorybridge.cli:main"
 memorybridge-server = "memorybridge.server:main"
 memorybridge-worker = "memorybridge.worker:main"
 memorybridge-codex-hook = "memorybridge.adapters:codex_hook_main"
+memorybridge-daily-summary = "memorybridge.daily_summary:main"
 
 [tool.setuptools.packages.find]
 include = ["memorybridge*"]

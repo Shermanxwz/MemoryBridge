@@ -383,18 +383,23 @@ class MemoryService:
                 await self.qdrant.ensure_vector_collection(
                     fallback_collection, size=len(vector), distance="Cosine"
                 )
+                indexed_at = utc_now()
+                indexed_payload = {
+                    "index_status": "indexed",
+                    "indexed_at": indexed_at,
+                    "embedding_model": self.settings.embed_model,
+                    "fallback_collection": fallback_collection,
+                }
                 await self.qdrant.upsert_vector_point(
-                    fallback_collection, p["id"], vector, payload
+                    fallback_collection,
+                    p["id"],
+                    vector,
+                    {**payload, **indexed_payload},
                 )
                 await self.qdrant.set_payload(
                     self.settings.write_collection,
                     p["id"],
-                    {
-                        "index_status": "indexed",
-                        "indexed_at": utc_now(),
-                        "embedding_model": self.settings.embed_model,
-                        "fallback_collection": fallback_collection,
-                    },
+                    indexed_payload,
                 )
                 indexed += 1
             except Exception:

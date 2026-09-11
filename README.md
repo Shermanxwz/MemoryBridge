@@ -254,6 +254,33 @@ recovery.
 `qwen3:4b-instruct` is intentionally not on the reliability path. Analysis/dedup/summarization may be added by a
 caller as optional curation, but no language-model outage may prevent capture, storage or recovery.
 
+## Optional daily conversation summaries
+
+本仓库提供一个独立的每日摘要任务：它默认在本地时间每天 03:40 处理前一天及最近 7 天内尚未完成的 Codex 会话，并读取
+MemoryBridge 原始集合中由 Hermes/OpenClaw/Codex 捕获的消息；使用 OpenAI-compatible New API 的
+`qwen3:4b-instruct` 生成摘要，摘要先写入 owner-only 本地 spool，再由现有 spool synchronizer 和 worker
+写入 `memorybridge_raw`、建立向量索引并进入既有备份链路。任务按日期/会话使用幂等键，重复运行不会重复写入。
+
+该任务不读取 ChatGPT 云端历史，也不会把完整 transcript 写进 MemoryBridge；ChatGPT 仍须通过明确的归档工具
+调用提供摘要。摘要器是可选派生层，模型不可用时不会阻塞任何原始捕获、MCP 写入、索引或恢复流程。
+
+部署单元位于 [`deploy/systemd/memorybridge-daily-summary.service`](deploy/systemd/memorybridge-daily-summary.service)
+和 [`deploy/systemd/memorybridge-daily-summary.timer`](deploy/systemd/memorybridge-daily-summary.timer)。可用
+`memorybridge-daily-summary --date YYYY-MM-DD --dry-run` 只读检查目标日期的会话范围。
+
+### Optional daily conversation summaries (English)
+
+The repository also ships an isolated daily summarizer. By default, at 03:40 local time it processes the previous
+day and retries unfinished dates from the preceding week, covering persisted Codex conversations and messages captured from Hermes/OpenClaw/Codex in the MemoryBridge raw
+collection. It calls the OpenAI-compatible New API model `qwen3:4b-instruct`, writes only a derived summary to the
+owner-only local spool, and lets the existing spool synchronizer and worker persist, index, and back it up. Date/session
+idempotency keys make retries safe.
+
+It does not scrape ChatGPT cloud history and does not copy full transcripts into MemoryBridge; ChatGPT still supplies
+summaries through an explicit archive tool call. The summarizer is an optional derived layer, so model downtime never
+blocks capture, MCP writes, indexing, or recovery. Use `memorybridge-daily-summary --date YYYY-MM-DD --dry-run` for a
+read-only scope check.
+
 ## Archive and recovery
 
 Derived vector indexes are rebuildable. Durable source collections are archived independently. The repository

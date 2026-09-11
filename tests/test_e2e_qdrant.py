@@ -163,6 +163,11 @@ async def test_full_qdrant_fallback_and_recovery_chain(tmp_path: Path, embedding
 
         indexed = await service.index_pending(limit=10)
         assert indexed["indexed"] == 2
+        fallback_collection = settings.fallback_generation(4)
+        fallback_point = await service.qdrant.get_point(fallback_collection, put1["id"])
+        assert fallback_point is not None
+        assert fallback_point["payload"]["index_status"] == "indexed"
+        assert fallback_point["payload"]["fallback_collection"] == fallback_collection
         vector = await service.search("architecture omega", limit=2)
         assert vector.mode == "vector"
         assert vector.hits[0].id == put1["id"]

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run MemoryBridge daily local conversation summarizer
+
+[Timer]
+OnCalendar=*-*-* 03:40:00
+Persistent=true
+AccuracySec=1min
+Unit=memorybridge-daily-summary.service
+
+[Install]
+WantedBy=timers.target
